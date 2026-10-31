@@ -33,6 +33,46 @@
   }
   .ix-topic:hover { background: #e0f2fe; transform: translateX(2px); }
   .ix-empty { padding: 4rem 1rem; text-align: center; color: #64748b; }
+  .ix-search-panel {
+    margin: 0.5rem 0 2rem;
+    padding: 1.25rem;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(125, 211, 252, 0.7);
+    border-radius: 1.25rem;
+    box-shadow: 0 10px 30px rgba(14, 165, 233, 0.08);
+  }
+  .ix-search-wrap { position: relative; margin-top: 0.65rem; }
+  .ix-search-icon {
+    position: absolute; left: 1rem; top: 50%; transform: translateY(-50%);
+    color: #0284c7; pointer-events: none;
+  }
+  .ix-search-input {
+    width: 100%;
+    padding: 0.9rem 3.25rem 0.9rem 2.85rem;
+    border: 1px solid #bae6fd;
+    border-radius: 0.9rem;
+    background: #f8fcff;
+    color: #0c4a6e;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color .15s, box-shadow .15s, background .15s;
+  }
+  .ix-search-input:focus {
+    background: #fff;
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
+  }
+  .ix-search-clear {
+    position: absolute; right: 0.65rem; top: 50%; transform: translateY(-50%);
+    min-width: 2.25rem; height: 2.25rem; border-radius: 999px;
+    color: #64748b; background: #e0f2fe; font-weight: 700;
+  }
+  .ix-search-clear:hover { background: #bae6fd; color: #075985; }
+  .ix-search-status { margin-top: 0.65rem; color: #64748b; font-size: 0.82rem; }
+  .ix-no-results {
+    padding: 3.5rem 1rem; text-align: center; color: #475569;
+    background: rgba(255,255,255,.72); border: 1px dashed #7dd3fc; border-radius: 1.25rem;
+  }
 </style>
 </head>
 <body>
@@ -42,8 +82,7 @@
         <span class="inline-block align-middle">📘</span>
         Engineer Textbook
       </div>
-      <input id="ix-search" type="search" placeholder="教材を検索..."
-        class="rounded-full bg-sky-50 px-4 py-2 text-sm placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-sky-300 w-44 sm:w-72">
+      <span class="text-xs text-sky-700/70">AWS CloudOps Learning</span>
     </div>
   </header>
 
@@ -68,6 +107,23 @@
       </div>
     </section>
 
+    <!-- Free-text search -->
+    <section class="ix-search-panel" aria-labelledby="ix-search-label">
+      <label id="ix-search-label" for="ix-search" class="block text-sm font-bold text-sky-950">
+        教材をフリーワード検索
+      </label>
+      <p class="mt-1 text-xs text-slate-500">教材名・説明・カテゴリから絞り込めます</p>
+      <div class="ix-search-wrap">
+        <span class="ix-search-icon" aria-hidden="true">⌕</span>
+        <input id="ix-search" class="ix-search-input" type="search"
+          placeholder="例：EC2、S3、監視" autocomplete="off"
+          aria-label="教材をフリーワード検索" aria-controls="ix-cats" aria-describedby="ix-search-status">
+        <button id="ix-search-clear" class="ix-search-clear" type="button"
+          aria-label="検索語をクリア" title="検索語をクリア" hidden>×</button>
+      </div>
+      <p id="ix-search-status" class="ix-search-status" aria-live="polite"></p>
+    </section>
+
     <!-- Stats -->
     <section class="grid grid-cols-3 gap-3 sm:gap-4 mt-2 mb-10">
       <div class="tb-card p-4 sm:p-5 text-center">
@@ -86,6 +142,16 @@
 
     <!-- Categories -->
     <section id="ix-cats" class="space-y-6"></section>
+
+    <section id="ix-no-results" class="ix-no-results" aria-live="polite" hidden>
+      <div class="text-4xl mb-3" aria-hidden="true">🔎</div>
+      <p class="font-semibold text-slate-700">一致する教材が見つかりませんでした</p>
+      <p class="text-sm mt-1">別のキーワードを試してみてください</p>
+      <button id="ix-search-reset" type="button"
+        class="mt-4 rounded-full bg-sky-100 px-4 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-200">
+        検索をリセット
+      </button>
+    </section>
 
     <!-- Empty state -->
     <template id="ix-empty-tpl">
@@ -141,19 +207,58 @@
   }
   cats.forEach(cat => root.appendChild(renderCategory(cat)));
 
-  // 検索
+  // フリーテキスト検索
   const search = document.getElementById('ix-search');
-  search.addEventListener('input', () => {
-    const q = search.value.trim().toLowerCase();
+  const clearSearch = document.getElementById('ix-search-clear');
+  const resetSearch = document.getElementById('ix-search-reset');
+  const searchStatus = document.getElementById('ix-search-status');
+  const noResults = document.getElementById('ix-no-results');
+
+  function normalize(value) {
+    return String(value || '').normalize('NFKC').toLowerCase().trim();
+  }
+
+  function applyFilter() {
+    const rawQuery = search.value.trim();
+    const terms = normalize(rawQuery).split(/\s+/).filter(Boolean);
+    let visibleCount = 0;
+
     document.querySelectorAll('[data-topic]').forEach(el => {
       const text = el.dataset.text || '';
-      el.style.display = (!q || text.includes(q)) ? '' : 'none';
+      const matched = terms.every(term => text.includes(term));
+      el.hidden = !matched;
+      if (matched) visibleCount++;
+    });
+
+    document.querySelectorAll('[data-sub-block]').forEach(block => {
+      const visible = [...block.querySelectorAll('[data-topic]')].some(el => !el.hidden);
+      block.hidden = !visible;
     });
     document.querySelectorAll('[data-cat-block]').forEach(block => {
-      const visible = [...block.querySelectorAll('[data-topic]')].some(el => el.style.display !== 'none');
-      block.style.display = visible ? '' : 'none';
+      const visible = [...block.querySelectorAll('[data-topic]')].some(el => !el.hidden);
+      block.hidden = !visible;
     });
+
+    clearSearch.hidden = !rawQuery;
+    noResults.hidden = visibleCount !== 0 || !rawQuery;
+    searchStatus.textContent = rawQuery
+      ? `「${rawQuery}」の検索結果：${visibleCount}件`
+      : `全${allTopics.length}件の教材を表示しています`;
+  }
+
+  function resetFilter() {
+    search.value = '';
+    applyFilter();
+    search.focus();
+  }
+
+  search.addEventListener('input', applyFilter);
+  search.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && search.value) resetFilter();
   });
+  clearSearch.addEventListener('click', resetFilter);
+  resetSearch.addEventListener('click', resetFilter);
+  applyFilter();
 
   // ===== helpers =====
   function collectTopics(nodes) {
@@ -191,6 +296,7 @@
 
     subs.forEach(sub => {
       const block = document.createElement('div');
+      block.dataset.subBlock = '';
       const topics = sub.path ? [sub] : (sub.children || []).filter(c => c.path);
       block.innerHTML = sub.path ? '' : `
         <div class="flex items-center gap-2 mb-2">
@@ -200,7 +306,7 @@
       `;
       const list = document.createElement('div');
       list.className = 'space-y-2';
-      topics.forEach(t => list.appendChild(renderTopic(t)));
+      topics.forEach(t => list.appendChild(renderTopic(t, cat.name, sub.name)));
       block.appendChild(list);
       card.appendChild(block);
     });
@@ -208,12 +314,19 @@
     return sec;
   }
 
-  function renderTopic(t) {
+  function renderTopic(t, categoryName, subcategoryName) {
     const a = document.createElement('a');
     a.className = 'ix-topic';
     a.href = t.path;
     a.dataset.topic = '';
-    a.dataset.text = `${t.name} ${t.summary || ''}`.toLowerCase();
+    a.dataset.text = normalize([
+      t.name,
+      t.summary,
+      t.id,
+      t.level,
+      categoryName,
+      subcategoryName
+    ].filter(Boolean).join(' '));
 
     const state = readProgress(t.id);
     const okCount = Object.values(state).filter(v => v && v.ok).length;

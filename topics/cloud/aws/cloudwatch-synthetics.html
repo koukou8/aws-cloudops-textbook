@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ja" data-topic-id="cloud-aws-cloudwatch-synthetics">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Amazon CloudWatch SyntheticsのCanaryで、リンク切れ、古いコンテンツ、重要導線をユーザー視点から継続監視し、アラームへつなげる方法を学ぶ教材。">
+  <title>Amazon CloudWatch Synthetics | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css?v=20261030-2">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"CloudWatch Synthetics"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">通常版 · 約55分</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">Amazon CloudWatch Synthetics</h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">サーバーが正常でも、利用者が見るページは壊れます。Canaryで実際の閲覧・クリック・表示内容を定期的に再現し、利用者より先に異常を見つけます。</p>
+
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">今回の結論</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">CloudWatch SyntheticsでCanaryを作成し、主要ページ・リンク・期待コンテンツを定期テストします。失敗時はCloudWatchアラームから通知します。</p>
+          <p class="ct-copy mt-2">404にはBroken Link Checker、終了済みキャンペーンの残存には文言のアサーションまたはVisual Monitoringを使います。インフラメトリクスが正常でも、ユーザー体験の異常を独立して検知できます。</p>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500">
+            <li>インフラ監視・ログ・分散トレース・合成監視の役割を区別する。</li>
+            <li>Heartbeat、Broken Link Checker、Visual Monitoring、カスタムスクリプトを選ぶ。</li>
+            <li>SuccessPercent、Duration、4xx／5xxとCloudWatchアラームを設計する。</li>
+            <li>スクリーンショット、HAR、ログを安全に保管し、失敗原因を調査する。</li>
+            <li>認証、VPC、複数ロケーション、ランタイム更新を本番運用へ落とし込む。</li>
+          </ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">基礎</a><a href="#design" class="underline underline-offset-4">テスト設計</a><a href="#operations" class="underline underline-offset-4">通知・調査</a><a href="#security" class="underline underline-offset-4">安全な運用</a><a href="#case" class="underline underline-offset-4">総合演習</a></nav>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-6"><div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div><div class="tb-progress"><div data-progress-bar style="width:0%"></div></div><p class="mt-2 text-xs text-slate-500">10問の正解状況を、このブラウザに保存します。</p></div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編：正常なサーバーと正常な体験は別</h2><span class="tb-badge is-basic">基礎</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 Canaryは利用者の行動を先回りして再現する</h3>
+            <div class="ct-copy"><p>CloudWatch SyntheticsのCanaryは、設定したスケジュールでエンドポイントやAPIへアクセスするスクリプトです。実際のトラフィックがない時間でもページを開き、リンクをたどり、フォームやログインフローを操作できます。</p><p>CanaryはNode.js、Python、Javaで記述でき、ヘッドレスブラウザーにはPuppeteer、Playwright、Seleniumを利用できます。選べる言語・フレームワークはランタイムごとに異なるため、目的に合う最新のサポート対象ランタイムを選びます。</p></div>
+            <div class="ct-flow" aria-label="Canaryによる合成監視"><div><small>SCHEDULE</small><strong>定期実行</strong><p>最短1分、rateまたはcron</p></div><div><small>USER JOURNEY</small><strong>閲覧・クリック・検証</strong><p>HTTP応答とDOM・画面を確認</p></div><div><small>DETECT</small><strong>メトリクスと成果物</strong><p>アラーム通知と原因調査</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Synthetics_Canaries.html" target="_blank" rel="noopener">AWS公式：Synthetic monitoring</a>、<a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Synthetics_Canaries_Library.html" target="_blank" rel="noopener">AWS公式：Synthetics runtimes</a></p>
+            <div data-quiz data-id="synthetics-q1" data-answer="c" data-explanation="Canaryは実際のブラウザーやHTTP操作を定期的に再現し、利用者が遭遇する前に体験上の異常を検知します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q1. CPUやネットワークが正常でも404を早期検知できる理由は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q1" value="a"><span>EC2のCPUを自動的に増やすから</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q1" value="b"><span>CloudTrailの操作履歴を削除するから</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q1" value="c"><span>利用者と同様にページへアクセスして応答や内容を検証するから</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q1" value="d"><span>DNSのTTLを常に0秒にするから</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 4つの観測手段を使い分ける</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">手段</th><th scope="col">主に分かること</th><th scope="col">404・古い表示への適性</th></tr></thead><tbody><tr><td>CloudWatchメトリクス</td><td>CPU、エラー率、レイテンシーなど</td><td>ページ内容までは分からない</td></tr><tr><td>Logs Insights</td><td>既に記録されたログの検索</td><td>ログに出ない表示不具合は見逃す</td></tr><tr><td>AWS X-Ray</td><td>サービス間の経路、セグメント、遅延</td><td>DOMや表示文言の正しさは検証しない</td></tr><tr><td>CloudWatch Synthetics</td><td>外部から見た可用性、導線、画面内容</td><td>リンク・文言・画像差分を能動的に検査</td></tr></tbody></table></div>
+            <div class="ct-note"><strong>競合ではなく補完関係です。</strong>Syntheticsで異常を見つけ、X-Rayやログで内部原因を掘り下げ、メトリクスで影響範囲を確認する流れが有効です。X-Rayのアクティブトレースを有効にしたCanaryは、Application Signalsのマップにも関連付けられます。</div>
+            <div data-quiz data-multiple data-id="synthetics-q2" data-answer="a,d" data-explanation="Syntheticsは利用者視点の能動テスト、X-Rayは内部の分散トレースです。両方を組み合わせると検知から原因調査までつなげられます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q2. 正しい説明を2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="synthetics-q2" value="a"><span>Syntheticsは実トラフィックがなくてもテストできる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="synthetics-q2" value="b"><span>X-Rayは画面上の古いキャンペーン文言を自動判定する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="synthetics-q2" value="c"><span>Logs Insightsは利用者から報告が来るまで実行できない</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="synthetics-q2" value="d"><span>Syntheticsで検知し、X-Rayやログで原因を追う構成が使える</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="design" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：異常の種類からテストを選ぶ</h2><span class="tb-badge is-applied">応用</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 404と古い表示ではチェック方法が違う</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">確認したいこと</th><th scope="col">向く方法</th><th scope="col">判定例</th></tr></thead><tbody><tr><td>URLが応答するか</td><td>Heartbeat Monitoring</td><td>HTTP 2xx、応答時間</td></tr><tr><td>ページ内のリンク切れ</td><td>Broken Link Checker</td><td>404、無効URL、タイムアウト</td></tr><tr><td>期待する文言・要素</td><td>カスタムUI Canary</td><td>「販売終了」が存在し、旧バナーが存在しない</td></tr><tr><td>画面の意図しない変化</td><td>Visual Monitoring</td><td>基準スクリーンショットとの差分率</td></tr><tr><td>ログイン・購入導線</td><td>GUI Workflow Builder／カスタムスクリプト</td><td>入力、クリック、遷移、完了要素</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>Broken Link Checkerは指定ページ内のリンクを収集し、指定した上限まで検査します。404だけでなく、不正なURL、空応答、タイムアウトなども検出できます。ランタイムによって利用できるBlueprintが異なり、Broken Link CheckerはPlaywrightランタイムではサポートされません。</p><p>「古いキャンペーンが表示されている」はHTTP 200でも発生します。期待する新しい文言の存在、終了済み文言の非存在、DOM要素やリンク先を明示的にアサートします。Visual Monitoringは補助になりますが、時刻・広告・利用者名など動的領域を除外しないと誤検知が増えます。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Synthetics_Canaries_Blueprints.html" target="_blank" rel="noopener">AWS公式：Canary blueprints</a></p>
+            <div data-quiz data-id="synthetics-q3" data-answer="b" data-explanation="リンクチェッカーは404を見つけられますが、200で返る古い内容には期待文言・禁止文言などのアサーションが必要です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q3. HTTP 200で古いキャンペーンを表示するページを確実に検知する方法は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q3" value="a"><span>CPUUtilizationだけを監視する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q3" value="b"><span>Canaryで期待文言と禁止文言をアサートする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q3" value="c"><span>HTTPステータスが200なら必ず成功にする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q3" value="d"><span>X-Rayのセグメント数だけを数える</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+            <div data-fill data-id="synthetics-q4" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q4. ページ内リンクの404を検査する代表的なBlueprintは？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="Broken Link Checker|broken link checker|ブロークンリンクチェッカー" aria-label="リンク切れ用Blueprint" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 重要導線を短いStepへ分ける</h3>
+            <div class="ct-copy"><p>1つの巨大なスクリプトで全ページを巡回するより、トップ表示、商品検索、詳細表示、ログインなど、利用者にとって意味のあるStepへ分けます。<code>executeStep()</code>や<code>executeHttpStep()</code>を使うと、StepName単位のSuccessPercentとDurationも発行できます。</p><p>監視頻度は障害の検知目標と費用で決めます。Canaryは1回実行またはrate／cronでスケジュールでき、rateは最短1分です。すべてを1分間隔にせず、最重要導線と低頻度ページで頻度を分けます。</p></div>
+            <div class="ct-flow"><div><small>STEP 1</small><strong>トップを開く</strong><p>主要要素とタイトルを確認</p></div><div><small>STEP 2</small><strong>主要リンクを操作</strong><p>遷移先とHTTP応答を確認</p></div><div><small>STEP 3</small><strong>業務結果を確認</strong><p>期待文言・URL・画面を検証</p></div></div>
+            <div data-quiz data-id="synthetics-q5" data-answer="d" data-explanation="重要導線を意味のあるStepに分けると、StepName別メトリクスでどこが失敗・遅延したかを切り分けやすくなります。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q5. 複数ページの監視を運用しやすくする設計は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q5" value="a"><span>全処理を名前のない1ステップへまとめる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q5" value="b"><span>失敗しても常に成功を返す</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q5" value="c"><span>すべてのページを必ず1分間隔で監視する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q5" value="d"><span>利用者の導線を意味のあるStepへ分け、Step別メトリクスを見る</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="operations" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：メトリクス・アラーム・原因調査</h2><span class="tb-badge is-prac">実務</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 SuccessPercentを通知へつなぐ</h3>
+            <div class="ct-copy"><p>Canaryは<code>CloudWatchSynthetics</code>名前空間へSuccessPercent、Duration、2xx、4xx、5xx、Failed requestsなどを発行します。基本の可用性アラームはSuccessPercentを使い、連続失敗数、評価期間、欠損データの扱いを監視間隔に合わせます。</p><p>1回の失敗ですぐ通知すると、一時的な名前解決や外部依存の揺らぎでノイズが増える場合があります。一方、重大な購入導線は単発失敗でも通知するなど、業務影響で閾値を分けます。通知先にはAmazon SNSやインシデント管理連携を設定します。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">メトリクス</th><th scope="col">見えること</th><th scope="col">代表的な使い方</th></tr></thead><tbody><tr><td>SuccessPercent</td><td>実行が成功し、失敗を検出しなかった割合</td><td>可用性アラーム</td></tr><tr><td>Duration</td><td>Canary全体またはStepの所要時間</td><td>体感性能の劣化</td></tr><tr><td>4xx / 5xx</td><td>ブラウザー・APIが受けたHTTPエラー数</td><td>リンク・サーバー異常の補助指標</td></tr><tr><td>VisualMonitoringSuccessPercent</td><td>基準画像と一致した割合</td><td>画面差分の監視</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Synthetics_Canaries_metrics.html" target="_blank" rel="noopener">AWS公式：Canary metrics</a></p>
+            <div data-quiz data-id="synthetics-q6" data-answer="a" data-explanation="Canaryの成功・失敗を直接表す基本メトリクスはSuccessPercentです。DurationやHTTPコードも補助的に監視します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q6. Canaryの失敗をCloudWatchアラームへつなぐ基本メトリクスは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q6" value="a"><span>SuccessPercent</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q6" value="b"><span>CPUUtilizationだけ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q6" value="c"><span>NetworkPacketsInだけ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q6" value="d"><span>EstimatedChargesだけ</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 失敗時は成果物を時系列で読む</h3>
+            <ol class="ct-steps"><li><strong>失敗Stepと時刻を確認</strong><p>SuccessPercent、Duration、4xx／5xx、StepNameを見ます。</p></li><li><strong>スクリーンショットを確認</strong><p>利用者が見た画面、クリック対象、表示崩れを確認します。</p></li><li><strong>HARとログを確認</strong><p>失敗したHTTP要求、リダイレクト、DNS・TLS・タイムアウトを切り分けます。</p></li><li><strong>アプリ内部へ進む</strong><p>X-Ray、アプリログ、依存サービスのメトリクスと同じ時刻を照合します。</p></li><li><strong>誤検知ならテストを修正</strong><p>動的領域、セレクター、タイムアウト、期待値、再試行を見直します。</p></li></ol>
+            <div class="ct-note"><strong>成果物もデータです。</strong>スクリーンショット、HAR、レポートはS3へ保存されます。認証Cookie、URLパラメータ、PIIが含まれる可能性を評価し、暗号化、アクセス権、保持期間、ログのマスキングを設計します。</div>
+            <div data-quiz data-multiple data-id="synthetics-q7" data-answer="a,c,d" data-explanation="スクリーンショット、HAR、ログ／レポートは失敗原因の調査材料になります。成果物には機密情報が含まれ得るため保護も必要です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q7. Canary失敗時に確認する成果物を3つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="synthetics-q7" value="a"><span>スクリーンショット</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="synthetics-q7" value="b"><span>EC2のAMI IDだけ</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="synthetics-q7" value="c"><span>HARファイル</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="synthetics-q7" value="d"><span>Canaryのログとレポート</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="security" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：安全で保守できるCanary</h2><span class="tb-badge is-prac">実務</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.1 マネージドでも運用設計は残る</h3>
+            <div class="ct-copy"><p>コンソールからCanaryを作成すると、実行用Lambda、Lambda Layer、IAMロール、CloudWatch Logs、成果物用S3バケット、任意のアラームなどが作成されます。Syntheticsはこの統合を管理しやすくしますが、権限・費用・ランタイム・保持を無視できるわけではありません。</p><p>実行ロールは対象URL、CloudWatch、S3、必要なSecrets Managerなどへ最小権限にします。ログイン資格情報をコードへ直書きせず、監視専用ユーザーを使い、実データの更新や注文確定を起こさない安全なテスト経路を用意します。</p></div>
+            <div class="grid sm:grid-cols-2 gap-4 mt-4"><div class="rounded-2xl bg-sky-50 p-5"><p class="font-bold text-sky-900">公開サイト</p><p class="mt-2 text-sm text-slate-700">通常のCanaryから外部URLへアクセス。WAFやbot制御で監視を誤遮断しないか確認。</p></div><div class="rounded-2xl bg-blue-50 p-5"><p class="font-bold text-sky-900">VPC内サイト</p><p class="mt-2 text-sm text-slate-700">CanaryをVPCへ関連付け、サブネット、Security Group、DNS、S3・CloudWatchへの送信経路を設計。</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Synthetics_Canaries_Create.html" target="_blank" rel="noopener">AWS公式：Creating a canary</a>、<a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Synthetics_artifact_encryption.html" target="_blank" rel="noopener">AWS公式：Artifact encryption</a></p>
+            <div data-quiz data-id="synthetics-q8" data-answer="b" data-explanation="Canaryの資格情報はコードへ埋め込まず、最小権限の監視専用ユーザーとSecrets Manager等を使い、テストが本番データを変更しないようにします。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q8. 認証後ページを監視する安全な方法は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q8" value="a"><span>管理者パスワードをスクリプトへ平文で記載する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q8" value="b"><span>最小権限の監視専用ユーザーと安全なシークレット参照を使う</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q8" value="c"><span>Canaryから実際の注文を毎分確定する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q8" value="d"><span>S3成果物を全世界へ公開する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.2 ランタイムと監視コードも変更管理する</h3>
+            <div class="ct-copy"><p>Syntheticsのランタイムにはサポート期限があります。最新ランタイムを検証して更新し、DOMセレクターや期待文言をアプリ変更と同じリポジトリ・レビュー・パイプラインで管理します。Safe canary updatesのDry Runを使えるランタイムでは、本番スケジュールへ確定する前に変更を検証できます。</p><p>複数地域からの体験差を調べる場合はMultilocation Canaryを検討します。LocationディメンションのSuccessPercentとDurationで地域別に比較し、集約メトリクスで全体アラームを作れます。監視場所を増やすほど実行回数と費用も増えるため、利用者分布と障害仮説から選びます。</p></div>
+            <div data-quiz data-id="synthetics-q9" data-answer="c" data-explanation="Canaryは一度作って終わりではありません。アプリ変更と同期して期待値・セレクターを更新し、サポート対象の最新ランタイムへ安全に移行します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q9. Canaryの保守として最も適切なのは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q9" value="a"><span>作成後はランタイムを永久に固定する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q9" value="b"><span>画面変更後も古いセレクターを使い続ける</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q9" value="c"><span>監視コードを版管理し、Dry Run等で検証してランタイムも更新する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q9" value="d"><span>失敗通知を無効にして誤検知をなくす</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">5</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：404と古いキャンペーンを早期検知</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <div class="ct-copy"><p>公開サイトの主要ページに404があり、別ページでは終了済みキャンペーンが表示されています。バックエンドとネットワークのメトリクスは正常で、運用負荷を抑えながら利用者より先に検知したい状況です。</p></div>
+          <div data-quiz data-id="synthetics-q10" data-answer="a" data-explanation="CloudWatch Syntheticsなら、リンク切れと表示内容をユーザー視点で定期検査し、標準メトリクスからCloudWatchアラームへ連携できます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q10. 最も運用オーバーヘッドが小さい解決策は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q10" value="a"><span>Synthetics Canaryで主要ページ・リンク・文言を定期テストし、CloudWatchアラームで通知する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q10" value="b"><span>Lambdaで巡回・スケジュール・成果物・メトリクス処理をすべて独自実装する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q10" value="c"><span>利用者から報告された後だけLogs Insightsを実行する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q10" value="d"><span>X-Rayのレイテンシーだけでページ文言を判定する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          <div class="ct-note"><strong>最小構成：</strong>Broken Link Checker＋重要ページの文言アサーション、5分程度の定期実行、SuccessPercentのアラーム、SNS通知、失敗時のスクリーンショット／HAR確認から始めます。監視対象と頻度は重要度に応じて段階的に増やします。</div>
+        </div>
+      </section>
+
+      <section id="rum-compare" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">6</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">追加演習：SyntheticsとRUMを使い分ける</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>要件</th><th>第一選択</th><th>理由</th></tr></thead><tbody><tr><td>公開URLの成功率を継続測定し、95%未満で通知</td><td>Synthetics Canary＋SuccessPercentアラーム＋SNS</td><td>利用者がいない時間でも擬似リクエストを発生させる</td></tr><tr><td>SPA全体の表示不良を利用者より先に検知</td><td>FQDNを対象にしたHeartbeat／UI Canary</td><td>CloudFront、静的資産、必要なAPIを同じ経路で確認できる</td></tr><tr><td>実利用者の端末・地域別性能やJavaScriptエラーを分析</td><td>CloudWatch RUM</td><td>実ブラウザーのセッションからテレメトリを収集する</td></tr></tbody></table></div>
+          <div class="ct-note mt-4"><strong>試験の軸：</strong>「利用者より先に」はSynthetics、「実利用者に何が起きたか」はRUMです。画面操作やAPI応答まで保証したい場合は、単純なHeartbeatだけでなくUI Canaryのアサーションを追加します。</div>
+          <div data-quiz data-id="synthetics-q11" data-answer="b" data-explanation="実利用者がいない時間帯でも能動的にFQDNへアクセスできるSyntheticsが先回り検知に適します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q11. ユーザー報告より先にSPA全体の表示不良を検知したい。最も直接的な方法は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q11" value="a"><span>RUMだけを有効化する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q11" value="b"><span>FQDNを定期確認するSynthetics Canaryを作る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="synthetics-q11" value="c"><span>ECS APIだけを監視する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+        </div>
+      </section>
+    </article>
+
+    <section class="mt-12"><h2 class="text-xl font-bold text-sky-950 mb-4">次のステップ</h2><div class="tb-card p-5 sm:p-6"><ul class="space-y-3 text-sm text-slate-700"><li><a class="text-sky-700 underline" href="cloudtrail.html">AWS CloudTrail</a>：監視設定を誰が変更したか追跡する。</li><li><a class="text-sky-700 underline" href="route53-cloudfront.html">Route 53 × CloudFront</a>：公開サイトのDNSとキャッシュ経路を理解する。</li><li><a class="text-sky-700 underline" href="waf.html">AWS WAF</a>：外形監視とは異なる、Web攻撃の緊急緩和を学ぶ。</li><li><a class="text-sky-700 underline" href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Synthetics_Canaries.html" target="_blank" rel="noopener">AWS公式：CloudWatch Synthetics canaries</a></li><li><a class="text-sky-700 underline" href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Synthetics_Canaries_Blueprints.html" target="_blank" rel="noopener">AWS公式：Canary blueprints</a></li></ul></div></section>
+    <div class="mt-10 text-center"><a href="../../../index.html" class="inline-block rounded-full bg-white text-sky-700 ring-1 ring-sky-200 px-6 py-3 text-sm font-semibold">← 教材一覧へ</a></div>
+  </main>
+
+  <footer class="text-center text-xs text-slate-400 pb-10">Engineer Textbook · CloudWatch Synthetics · 公式資料確認：2026-10-30</footer>
+  <script src="../../../assets/shared.js?v=20261030-2"></script>
+</body>
+</html>

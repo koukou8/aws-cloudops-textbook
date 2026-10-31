@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ja" data-topic-id="cloud-aws-cloudformation-drift">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="AWS CloudFormationのテンプレート再利用、CloudWatch DashboardのIaC化、失敗時の保持、ドリフト検出を学ぶ通常版教材。">
+  <title>AWS CloudFormation — テンプレート設計とドリフト検出 | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css?v=20261030-2">
+  <style>.tb-sortable,.tb-sortable li,.tb-sortable .tb-sort-label,.tb-accordion-body{min-width:0;overflow-wrap:anywhere}</style>
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"CloudFormation"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">通常版 · 約55分</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">AWS CloudFormation<br class="sm:hidden">テンプレート設計とドリフト検出</h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">テンプレートを正本（Source of Truth）として、コンソールやAPIから加えられた管理外変更を検出します。IAMカスタマー管理ポリシーを例に、定期検出、非同期処理、通知、原因追跡まで整理します。</p>
+
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">今回の設問の結論</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">EventBridgeでLambdaを定期起動し、CloudFormationのドリフト検出結果がDRIFTEDならSNSで通知します。</p>
+          <p class="ct-copy mt-2">CloudFormationテンプレートが期待構成をすでに保持しているため、比較用JSONをS3へ二重管理する必要がありません。カスタマー管理ポリシーを <code>AWS::IAM::ManagedPolicy</code> として定義していれば、現在のCloudFormationドリフト検出対象です。</p>
+          <div class="ct-note mt-4"><strong>現在の実装：</strong>定期実行には、旧来のEventBridgeスケジュールルールよりEventBridge Schedulerが推奨です。またCloudFormationは検出完了時にEventBridgeへ状態変更イベントを発行するため、Lambdaを数分待機させず、完了イベントをSNSへ送る構成も選べます。</div>
+          <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-drift.html" target="_blank" rel="noopener">CloudFormationドリフト検出</a>、<a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/event-detail-stack-drift-detection-change.html" target="_blank" rel="noopener">ドリフト状態変更イベント</a></p>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500">
+            <li>期待構成、実構成、ドリフトの関係を説明する。</li>
+            <li><code>DetectStackDrift</code>の非同期ライフサイクルと状態コードを理解する。</li>
+            <li>EventBridge Scheduler、Lambda、SNSで定期監視を構築する。</li>
+            <li>CloudTrail、Access Analyzer、Trusted Advisorとの役割を区別する。</li>
+            <li>複数アカウントで最小権限・通知・復旧を設計する。</li>
+          </ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">ドリフトの基礎</a><a href="#detection" class="underline underline-offset-4">検出API</a><a href="#automation" class="underline underline-offset-4">自動化と通知</a><a href="#operations" class="underline underline-offset-4">比較と運用</a><a href="#case" class="underline underline-offset-4">総合演習</a></nav>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-6"><div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div><div class="tb-progress"><div data-progress-bar style="width:0%"></div></div><p class="mt-2 text-xs text-slate-500">9問の正解状況を、このブラウザに保存します。</p></div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編：ドリフトは「正本との差分」</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 テンプレートと実リソースを比較する</h3>
+            <div class="ct-copy"><p>CloudFormationのドリフト（drift）は、テンプレートとパラメータから決まる期待構成と、現在のAWSリソースの構成が食い違った状態です。コンソール、CLI、SDKからスタック外でプロパティを変更した場合や、管理対象リソースを削除した場合に発生します。</p><p>スタック内の対応リソースが1つでも変更されると、スタックのドリフト状態は <code>DRIFTED</code> になります。すべて一致すれば <code>IN_SYNC</code>、未確認は <code>NOT_CHECKED</code> です。</p></div>
+            <div class="ct-flow" aria-label="CloudFormationドリフト検出の比較"><div><small>EXPECTED</small><strong>Template＋Parameters</strong><p>期待するIAMポリシー</p></div><div><small>COMPARE</small><strong>Drift detection</strong><p>対応プロパティを比較</p></div><div><small>ACTUAL</small><strong>AWS resource</strong><p>現在の実構成</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-drift.html" target="_blank" rel="noopener">Detect unmanaged configuration changes</a></p>
+            <div data-quiz data-id="cfn-drift-q1" data-answer="b" data-explanation="CloudFormationドリフトは、テンプレートとパラメータで表す期待構成と、現在の実リソース構成との差分です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q1. CloudFormationのドリフトとは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q1" value="a"><span>リージョン間のネットワーク遅延</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q1" value="b"><span>期待構成と現在の実構成の差分</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q1" value="c"><span>CloudTrailログの配送遅延</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q1" value="d"><span>スタック更新のロールバック時間</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 比較されるのは明示プロパティと対応リソースだけ</h3>
+            <div class="ct-copy"><p>CloudFormationは、テンプレートまたはパラメータで明示したプロパティだけをドリフト比較します。既定値も監視したい場合は、既定値と同じ値であってもテンプレートへ明示します。</p><p>リソースタイプごとに対応状況が異なります。現在、<code>AWS::IAM::ManagedPolicy</code>、<code>AWS::IAM::Role</code>、<code>AWS::IAM::RolePolicy</code>などは対応しています。一方、複合リソースの<code>AWS::IAM::Policy</code>は公式の対応一覧に掲載されていないため、同じ「IAMポリシー」でも型を確認します。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">確認点</th><th scope="col">今回</th></tr></thead><tbody><tr><th scope="row">リソースタイプ</th><td><code>AWS::IAM::ManagedPolicy</code></td></tr><tr><th scope="row">期待値</th><td>テンプレートの<code>PolicyDocument</code>等</td></tr><tr><th scope="row">実際値</th><td>IAMに現在適用されているポリシー</td></tr><tr><th scope="row">差分</th><td>リソースは<code>MODIFIED</code>、スタックは<code>DRIFTED</code></td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resource-import-supported-resources.html" target="_blank" rel="noopener">Resource type support</a></p>
+            <div data-quiz data-id="cfn-drift-q2" data-answer="c" data-explanation="CloudFormationはテンプレートに明示した、ドリフト検出対応リソースのプロパティを比較します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q2. ドリフト検出の対象として正しい説明は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q2" value="a"><span>AWS上の全リソースと全プロパティを自動比較する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q2" value="b"><span>CloudTrailに記録された操作だけを比較する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q2" value="c"><span>対応リソースの、テンプレートへ明示したプロパティを比較する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q2" value="d"><span>IAMポリシーはすべて対象外である</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="detection" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：非同期APIと状態コード</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 DetectStackDriftは結果をすぐ返さない</h3>
+            <div class="ct-copy"><p><code>DetectStackDrift</code>は検出処理を開始し、<code>StackDriftDetectionId</code>を返します。処理は数分かかる場合があるため、そのIDを使って<code>DescribeStackDriftDetectionStatus</code>を確認します。完了後に詳細が必要なら<code>DescribeStackResourceDrifts</code>を呼びます。</p><p>同じスタックで同時に実行できるドリフト検出は1つです。Lambdaでポーリングする場合は、タイムアウト、バックオフ、重複起動、<code>DETECTION_FAILED</code>も処理します。</p></div>
+            <ol class="ct-steps"><li><strong>DetectStackDrift</strong><p>検出を開始し、検出IDを受け取ります。</p></li><li><strong>DescribeStackDriftDetectionStatus</strong><p><code>DETECTION_IN_PROGRESS</code>から完了または失敗まで確認します。</p></li><li><strong>StackDriftStatusを判定</strong><p><code>DRIFTED</code>なら通知し、必要に応じてリソース差分を取得します。</p></li></ol>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_DetectStackDrift.html" target="_blank" rel="noopener">DetectStackDrift API</a></p>
+            <div class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q3. ドリフト検出の正しい順序へ並べ替えてください。</p><ul data-sortable data-id="cfn-drift-q3" data-answer="start,status,details" class="tb-sortable"><li data-id="details">DescribeStackResourceDriftsで詳細を取得</li><li data-id="start">DetectStackDriftで開始</li><li data-id="status">DescribeStackDriftDetectionStatusで完了確認</li></ul><p data-sortable-feedback class="text-sm mt-2"></p></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 「処理状態」と「差分状態」を分ける</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">種類</th><th scope="col">主な値</th><th scope="col">意味</th></tr></thead><tbody><tr><th scope="row">DetectionStatus</th><td><code>DETECTION_IN_PROGRESS</code> / <code>DETECTION_COMPLETE</code> / <code>DETECTION_FAILED</code></td><td>比較処理そのものの進捗</td></tr><tr><th scope="row">StackDriftStatus</th><td><code>DRIFTED</code> / <code>IN_SYNC</code> / <code>NOT_CHECKED</code></td><td>期待構成との差分</td></tr><tr><th scope="row">ResourceDriftStatus</th><td><code>MODIFIED</code> / <code>DELETED</code> / <code>IN_SYNC</code></td><td>個別リソースの差分</td></tr></tbody></table></div>
+            <div class="ct-note"><strong>失敗を正常扱いしない：</strong><code>DETECTION_FAILED</code>では一部結果が得られる場合がありますが、監視としてはエラー通知し、権限不足やAPIエラーを調査します。</div>
+            <div data-fill data-id="cfn-drift-q4" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q4. 期待構成と実構成が異なるスタックの状態は？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="DRIFTED|drifted" aria-label="ドリフトしたスタックの状態" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="automation" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：定期検出と通知</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 設問どおりの最小構成</h3>
+            <div class="ct-flow" aria-label="定期ドリフト検出の構成"><div><small>SCHEDULE</small><strong>EventBridge Scheduler</strong><p>rate / cronで定期起動</p></div><div><small>COMPARE</small><strong>Lambda＋CloudFormation</strong><p>ドリフト検出と判定</p></div><div><small>NOTIFY</small><strong>Amazon SNS</strong><p>DRIFTEDを通知</p></div></div>
+            <div class="ct-copy mt-4"><p>EventBridge SchedulerからLambdaを定期起動し、対象スタックのドリフト検出を開始します。Lambdaが完了まで確認し、<code>StackDriftStatus=DRIFTED</code>なら、スタックARN、アカウント、リージョン、ドリフトしたリソースをSNSへ発行します。</p><p>これは提示された4選択肢では最も管理作業が少ない解答です。期待値をCloudFormationテンプレートに一本化でき、独自のJSON比較ロジックやS3上の第二の正本を持たずに済みます。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/lambda/latest/dg/with-eventbridge-scheduler.html" target="_blank" rel="noopener">SchedulerからLambdaを起動</a></p>
+            <div data-quiz data-id="cfn-drift-q5" data-answer="a" data-explanation="SchedulerでLambdaを起動し、CloudFormationの期待値と実構成を比較して、DRIFTED時だけSNSへ通知します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q5. 設問の要件を最小管理で満たす構成は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q5" value="a"><span>Scheduler → Lambdaでドリフト検出 → DRIFTEDならSNS</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q5" value="b"><span>S3へ期待JSONを複製し、独自比較処理を保守</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q5" value="c"><span>Trusted AdvisorのIAMチェックだけを利用</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q5" value="d"><span>Access Analyzerが生成した最小権限案と比較</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 完了イベントならLambdaを待機させずに済む</h3>
+            <div class="ct-copy"><p>CloudFormationは、検出の開始・完了・失敗を「CloudFormation Drift Detection Status Change」イベントとしてEventBridgeへ送ります。開始用Lambdaは<code>DetectStackDrift</code>を呼んだら終了し、別ルールで<code>DETECTION_COMPLETE</code>かつ<code>DRIFTED</code>を絞り込んでSNSへ送れます。</p><p>このイベント駆動構成は、Lambda内で数分ポーリングするより実行時間とタイムアウト管理を減らせます。設問の正解の意図を保ちながら、実装をより疎結合にできます。</p></div>
+            <pre class="mt-4 rounded-2xl bg-slate-900 text-sky-100 p-4 overflow-x-auto text-xs leading-6"><code>{
+  "source": ["aws.cloudformation"],
+  "detail-type": ["CloudFormation Drift Detection Status Change"],
+  "detail": { "status-details": {
+    "detection-status": ["DETECTION_COMPLETE"],
+    "stack-drift-status": ["DRIFTED"]
+  }}
+}</code></pre>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/event-detail-stack-drift-detection-change.html" target="_blank" rel="noopener">Drift Detection Status Change event</a></p>
+            <div data-quiz data-id="cfn-drift-q6" data-answer="d" data-explanation="CloudFormationの完了イベントをEventBridgeでフィルターすると、Lambdaで長時間ポーリングせずDRIFTEDだけをSNSへ送れます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q6. Lambdaの長時間ポーリングを避ける改善策は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q6" value="a"><span>Lambdaのメモリを最大にする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q6" value="b"><span>CloudTrailを無効にする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q6" value="c"><span>SNSを1分ごとにポーリングする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q6" value="d"><span>CloudFormationのドリフト完了イベントをEventBridgeで受ける</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="operations" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：証跡・権限・複数アカウント</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.1 CloudTrailは「誰が変えたか」、ドリフトは「何が違うか」</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">サービス</th><th scope="col">答える問い</th><th scope="col">今回の役割</th></tr></thead><tbody><tr><th scope="row">CloudFormation drift</th><td>正本と今の構成は違うか</td><td>差分検出</td></tr><tr><th scope="row">CloudTrail</th><td>誰が、いつ、どのAPIを呼んだか</td><td>原因・操作主体の追跡</td></tr><tr><th scope="row">IAM Access Analyzer</th><td>外部アクセスや実利用権限をどう絞るか</td><td>最小権限の検討</td></tr><tr><th scope="row">Trusted Advisor</th><td>既知のベストプラクティスに違反していないか</td><td>広い運用チェック</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>CloudTrailだけでも<code>CreatePolicyVersion</code>や<code>SetDefaultPolicyVersion</code>などの変更APIを追跡できますが、変更パターンの列挙やテンプレートとの差の判断が別途必要です。ドリフト通知で対象を特定し、CloudTrailで変更者と時刻を調べる組み合わせが明快です。</p><p>Access Analyzerのポリシー生成は、CloudTrailアクティビティを基に実際に使った権限の案を作る機能です。デプロイした期待ポリシーの同一性を確認する機能ではありません。</p></div>
+            <div data-quiz data-id="cfn-drift-q7" data-answer="c" data-explanation="ドリフトで期待構成との差を検出し、CloudTrailで変更API・実行主体・時刻を追跡します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q7. ドリフト通知後に「誰が変更したか」を調べるサービスは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q7" value="a"><span>Trusted Advisor</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q7" value="b"><span>IAM Access Analyzerのポリシー生成</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q7" value="c"><span>AWS CloudTrail</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q7" value="d"><span>Amazon Inspector</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.2 複数アカウント運用のチェックリスト</h3>
+            <ol class="ct-steps"><li><strong>対象型を確認</strong><p><code>AWS::IAM::ManagedPolicy</code>など、公式一覧で対応を確認します。</p></li><li><strong>監視したい値を明示</strong><p>既定値任せにせず、重要プロパティをテンプレートへ明記します。</p></li><li><strong>検出権限を最小化</strong><p><code>cloudformation:DetectStackDrift</code>等と、対象リソースの読取権限だけを付与します。</p></li><li><strong>各アカウントへ同じ監視を展開</strong><p>StackSetsまたはパイプラインでScheduler、Lambda、SNS連携を標準化します。</p></li><li><strong>通知を運用可能にする</strong><p>アカウント、リージョン、スタック、論理ID、差分を含めます。</p></li><li><strong>復旧方針を決める</strong><p>テンプレートへ戻すか、正当な緊急変更をコードへ取り込むかをレビューします。</p></li></ol>
+            <div class="ct-note"><strong>自動修復は慎重に：</strong>検出直後にスタック更新で上書きすると、障害対応中の緊急変更を消す可能性があります。最初は通知と承認を挟み、変更権限もパイプライン中心へ絞ります。</div>
+            <details class="tb-accordion mt-4"><summary>AWS Configのマネージドルールを使う選択肢</summary><div class="tb-accordion-body"><code>CLOUDFORMATION_STACK_DRIFT_DETECTION_CHECK</code>を使うと、Configがスタックのドリフトを評価できます。多くのスタックを継続的なコンプライアンスとして扱う場合は、Lambdaコードを減らせる実務上の候補です。ただし今回の4択には含まれず、通知まで含む設計や評価頻度・費用は別途決めます。</div></details>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/config/latest/developerguide/cloudformation-stack-drift-detection-check.html" target="_blank" rel="noopener">AWS Config managed rule</a></p>
+            <div data-quiz data-multiple data-id="cfn-drift-q8" data-answer="a,c" data-explanation="重要プロパティをテンプレートへ明示し、対応するCloudFormation APIとリソース読取権限を最小限付与します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q8. 信頼できるドリフト監視のために必要なものを2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="cfn-drift-q8" value="a"><span>重要プロパティをテンプレートへ明示する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="cfn-drift-q8" value="b"><span>LambdaへAdministratorAccessを付与する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="cfn-drift-q8" value="c"><span>CloudFormation APIと対象リソースの読取権限を付与する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="cfn-drift-q8" value="d"><span>CloudTrailを期待構成の保存先として使う</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">5</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：IAMポリシーの変更を検出する</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <h3 class="text-lg font-bold text-sky-900 mb-3">4つの選択肢を比較する</h3>
+          <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">方式</th><th scope="col">判定</th><th scope="col">理由</th></tr></thead><tbody><tr><th scope="row">定期ドリフト検出＋SNS</th><td>正解</td><td>テンプレートを正本として再利用できる</td></tr><tr><th scope="row">Trusted Advisor</th><td>不正解</td><td>個別ポリシーのデプロイ後差分を検出しない</td></tr><tr><th scope="row">Access Analyzer生成結果との比較</th><td>不正解</td><td>実利用権限の案であり期待ポリシーではない</td></tr><tr><th scope="row">S3上のJSONと独自比較</th><td>不正解</td><td>正本の二重管理と独自処理が増える</td></tr></tbody></table></div>
+          <div class="ct-note"><strong>CloudTrailが設定済みである意味：</strong>ドリフト検出の実行にCloudTrailは必須ではありません。通知後に変更者・API・時刻を追跡できる監査証跡として利用します。</div>
+          <div data-quiz data-id="cfn-drift-q9" data-answer="b" data-explanation="EventBridgeでLambdaを定期実行し、CloudFormationのドリフト検出でDRIFTEDならSNS通知する方法が、テンプレートを正本として最小管理で要件を満たします。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q9. 管理作業を最小化してIAMポリシーの管理外変更を検出・通知する方法は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q9" value="a"><span>Trusted AdvisorのIAMチェックだけを利用</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q9" value="b"><span>EventBridgeからLambdaでスタックドリフトを確認し、DRIFTEDならSNS通知</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q9" value="c"><span>Access Analyzerの生成ポリシーと一致するまで比較</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q9" value="d"><span>期待JSONをS3へ複製し続けて独自比較</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+        </div>
+      </section>
+
+      <section class="tb-card p-5 sm:p-7">
+        <h2 class="text-xl font-bold text-sky-950">覚えておく3行</h2>
+        <ul class="mt-4 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500"><li>期待構成はCloudFormationテンプレートに一本化し、別のJSON正本を増やさない。</li><li><code>DetectStackDrift</code>は非同期。完了状態とドリフト状態を分けて判定する。</li><li>ドリフトで「何が違うか」、CloudTrailで「誰が変えたか」を確認する。</li></ul>
+        <p class="ct-source mt-5">公式仕様確認日：2026-10-30</p>
+      </section>
+      <section id="template-practice" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">6</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">追加演習：再利用・ダッシュボード・失敗調査</h2></div>
+        <div class="space-y-5">
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">既存ダッシュボードをスタックごとに再現する</h3><p class="ct-copy mt-3">CloudWatchコンソールのView/edit source、または<code>GetDashboard</code>でJSONを取得し、<code>AWS::CloudWatch::Dashboard</code>の必須<code>DashboardBody</code>へ組み込みます。<code>DashboardName</code>は省略するか<code>!Sub '${AWS::StackName}-ops'</code>のように一意化します。ダッシュボードはアカウント内でグローバルで、同名固定は複数スタックで衝突します。</p><div class="ct-note mt-4"><strong>Refの意味：</strong>同じテンプレートのDashboardリソースに対する<code>Ref</code>はDashboardNameを返します。既存ダッシュボードのARNから内容を複製する機能ではありません。</div></div>
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">単一テンプレートを開発・検証・本番で再利用する</h3><p class="ct-copy mt-3">環境ごとに変わるインスタンスタイプ、VPC ID、容量などを<code>Parameters</code>へ外出しし、必要に応じて<code>Mappings</code>と<code>Conditions</code>を組み合わせます。User dataはEC2の初期化、Nested Stackは構造分割、Stack Policyは更新保護であり、環境値の注入そのものではありません。</p></div>
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">読み取り専用属性をPropertiesへ書かない</h3><p class="ct-copy mt-3"><code>AWS::EC2::Instance</code>の<code>PublicDnsName</code>は作成後に<code>Fn::GetAtt</code>で読む属性であり、設定可能なプロパティではありません。テンプレート内に書くと検証エラーになります。設問のAMI IDやSubnet IDが例示用プレースホルダーなら、実環境では有効な値へ置換します。</p></div>
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">作成失敗後も成功済みリソースを残す</h3><p class="ct-copy mt-3"><code>create-stack --on-failure DO_NOTHING</code>、または<code>--disable-rollback</code>を使います（同時指定不可）。スタックは<code>CREATE_FAILED</code>となり、成功済みリソースを観察して修正後に再試行できます。<code>ROLLBACK</code>は既定動作で削除され、RollbackConfigurationはCloudWatchアラームのトリガー設定です。</p></div>
+        </div>
+        <div data-quiz data-id="cfn-drift-q10" data-answer="d" data-explanation="JSONのダッシュボード定義をDashboardBodyへ入れ、名前をスタックごとに一意化します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q10. 既存CloudWatch Dashboard相当をスタックごとに作る方法は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q10" value="a"><span>既存ARNをDashboardBodyへRefする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q10" value="b"><span>固定の同じDashboardNameだけを書く</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q10" value="c"><span>Lambdaからcloudformation put-dashboardを呼ぶ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cfn-drift-q10" value="d"><span>Dashboard JSONをDashboardBodyへ組み込み、名前を一意化する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+      </section>
+    </article>
+  </main>
+  <script src="../../../assets/shared.js?v=20261030-2"></script>
+</body>
+</html>

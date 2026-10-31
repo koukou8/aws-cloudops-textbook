@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ja" data-topic-id="cloud-aws-cdk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="AWS CDKによるInfrastructure as Code、Construct、Stack、環境差分、cdk diff、GitLab連携、承認付きCDK Pipelinesを学ぶ通常版教材。">
+  <title>AWS CDK | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"AWS CDK"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">通常版 · 約55分</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">AWS CDK</h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">PythonやTypeScriptでAWSインフラを定義し、Gitレビュー、再利用可能なConstruct、複数アカウントへの承認付きデプロイを一つの開発フローにします。</p>
+
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">今回の設問の結論</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">AWS CDKでコード化し、GitLabでレビューし、CDK Pipelinesで検証・承認・デプロイを自動化します。</p>
+          <div class="ct-flow mt-5" aria-label="AWS CDKの変更フロー"><div><small>GITLAB</small><strong>Merge Request</strong><p>差分、レビュー、承認、履歴</p></div><div><small>CI / SYNTH</small><strong>Test + cdk synth/diff</strong><p>構文・テスト・変更内容を検証</p></div><div><small>CDK PIPELINES</small><strong>Dev → Test → Prod</strong><p>本番前に手動承認を挿入</p></div></div>
+          <div class="ct-note"><strong>境界を正確に：</strong>GitLabとの接続は、CDK Pipelinesの基盤となるAWS CodePipelineからAWS CodeConnectionsを使います。GitLabのマージリクエスト承認と、デプロイ直前の <code>ManualApprovalStep</code> は別のゲートです。</div>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500"><li>CDK、Construct、Stack、Stage、CloudFormationの関係を説明する。</li><li>同じコードから開発・検証・本番を安全に構成し、複数アカウントへ展開する。</li><li>GitLab、<code>cdk diff</code>、テスト、承認、監査を組み合わせた変更管理を設計する。</li></ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">CDKの基礎</a><a href="#environments" class="underline underline-offset-4">環境設計</a><a href="#delivery" class="underline underline-offset-4">CI/CD</a><a href="#case" class="underline underline-offset-4">設問演習</a></nav>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-6"><div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div><div class="tb-progress"><div data-progress-bar style="width:0%"></div></div><p class="mt-2 text-xs text-slate-500">10問の正解状況を、このブラウザに保存します。</p></div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編：プログラムからCloudFormationを生成する</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 AWS CDKはIaC開発フレームワーク</h3>
+            <div class="ct-copy"><p>AWS Cloud Development Kit（AWS CDK）は、TypeScript、Python、Java、C#、Goなどの汎用言語でAWSインフラを定義するオープンソースフレームワークです。条件分岐、ループ、型、クラス、テストといったソフトウェア開発の技法を利用できます。</p><p>CDKコードを直接AWS APIの命令列として実行するのではありません。<code>cdk synth</code>でCloudFormationテンプレートとアセットを含むクラウドアセンブリへ変換し、CloudFormationがリソースを予測可能に作成・更新・ロールバックします。</p></div>
+            <div class="ct-flow"><div><small>SOURCE</small><strong>TypeScript / Python</strong><p>Constructを組み合わせる</p></div><div><small>SYNTHESIS</small><strong>cdk synth</strong><p>CloudFormationテンプレートを生成</p></div><div><small>DEPLOYMENT</small><strong>CloudFormation</strong><p>差分適用とロールバック</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/cdk/v2/guide/" target="_blank" rel="noopener">AWS CDKとは</a></p>
+            <div data-quiz data-id="cdk-q1" data-answer="b" data-explanation="AWS CDKは汎用言語でインフラを定義し、CloudFormationテンプレートへ合成してデプロイします。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q1. AWS CDKの説明として正しいものは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="cdk-q1" value="a"><span>AWS APIを時刻指定で実行するスケジューラー</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q1" value="b"><span>汎用言語の定義をCloudFormationへ合成するIaCフレームワーク</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q1" value="c"><span>Gitの代わりになるバージョン管理サービス</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q1" value="d"><span>複数クラウド共通のStateファイル形式</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 Constructで再利用し、Stackでデプロイする</h3>
+            <div class="ct-copy"><p>Constructはリソースを表現する再利用可能な部品です。L1はCloudFormationリソースとほぼ1対1、L2は安全で便利な既定値を持つ高水準API、L3は複数サービスを組み合わせたパターンです。独自Constructには、組織標準の暗号化、タグ、ログ、監視を封じ込められます。</p><p>StackはCloudFormationスタックに対応するデプロイ単位です。再利用する論理部品はConstructにし、環境や配備単位の組み立てをStackで行うのが基本です。Stageは複数Stackを開発・検証・本番などのまとまりとしてパイプラインへ追加するときに使います。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>概念</th><th>役割</th><th>例</th></tr></thead><tbody><tr><th>Construct</th><td>再利用・合成する論理部品</td><td>社内標準VPC、監査付きS3</td></tr><tr><th>Stack</th><td>CloudFormationのデプロイ単位</td><td>NetworkStack、AppStack</td></tr><tr><th>Stage</th><td>環境として複数Stackをまとめる</td><td>Dev、Staging、Prod</td></tr><tr><th>App</th><td>Constructツリー全体のルート</td><td>プラットフォーム全体</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/cdk/v2/guide/best-practices.html" target="_blank" rel="noopener">CDKベストプラクティス</a></p>
+            <div data-quiz data-id="cdk-q2" data-answer="c" data-explanation="再利用可能な論理部品はConstruct、デプロイ境界はStackとしてモデル化します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q2. 組織標準のVPCを複数環境で再利用したい。最も適切なモデルは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="cdk-q2" value="a"><span>各環境でコンソールから作り直す</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q2" value="b"><span>VPCごとに別のAppをコピーする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q2" value="c"><span>標準VPCをConstructにし、各Stackから利用する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q2" value="d"><span>LambdaからCreateVpc APIを直接呼ぶ</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.3 synth・diff・deployを分ける</h3>
+            <div class="ct-copy"><p><code>cdk synth</code>はコードを実行してテンプレートを生成し、型・構文・合成エラーを検出します。<code>cdk diff</code>はローカル定義とデプロイ済みStackを比較し、追加・削除・変更やIAM権限の差分を表示します。現在のCLIでは読み取り専用変更セットを使い、置換を含む正確な差分を確認できます。</p><p><code>cdk deploy</code>は合成結果をCloudFormation経由で適用します。本番レビューでは、Git差分だけでなく、合成テンプレートや <code>cdk diff</code>、CloudFormation変更セットの結果も確認します。</p></div>
+            <pre class="tb-code mt-5"><code>npm test
+npx cdk synth ProdStack
+npx cdk diff ProdStack
+# 承認後にパイプラインが deploy</code></pre>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/cdk/v2/guide/ref-cli-cmd-diff.html" target="_blank" rel="noopener">cdk diff</a></p>
+            <div data-fill data-id="cdk-q3" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q3. デプロイ済みStackとローカルCDK定義の差分を確認するコマンドは？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="cdk diff|npx cdk diff" aria-label="CDK差分確認コマンド" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="environments" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：複数アカウント・複数環境を一つの設計で展開する</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 Environmentと設定オブジェクト</h3>
+            <div class="ct-copy"><p>Stackの <code>env</code> にAWSアカウントIDとリージョンを指定すると、配備先が明確になります。同じConstructへ環境別の型付き設定を渡し、開発では小さなインスタンス、本番ではMulti-AZや厳しい保持設定を選ぶ構成にします。</p><p>Contextはアプリ、Stack、Constructに関連付けるキー・値です。CLIの <code>--context</code> や <code>cdk.json</code>から与えられます。CDKがAWS参照結果をキャッシュする <code>cdk.context.json</code>も含め、再現性のためリポジトリへコミットします。ただし秘密情報はContextやGitへ置かず、Secrets Managerなどを参照します。</p></div>
+            <pre class="tb-code mt-5"><code>const configs = {
+  dev:  { account: '111111111111', region: 'ap-northeast-1', multiAz: false },
+  prod: { account: '222222222222', region: 'ap-northeast-1', multiAz: true }
+};
+
+new PlatformStage(app, 'Prod', {
+  env: { account: configs.prod.account, region: configs.prod.region },
+  config: configs.prod
+});</code></pre>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/cdk/v2/guide/context.html" target="_blank" rel="noopener">CDK Context</a>、<a href="https://docs.aws.amazon.com/cdk/v2/guide/stacks.html" target="_blank" rel="noopener">CDK Stack</a></p>
+            <div data-quiz data-multiple data-id="cdk-q4" data-answer="a,c,d" data-explanation="配備先はEnvironmentで明示し、設定は型付きで注入します。cdk.jsonとcdk.context.jsonは再現性のため管理しますが、秘密は置きません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q4. 環境差分の管理として適切なものを3つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="cdk-q4" value="a"><span>StackのEnvironmentでアカウントとリージョンを明示</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="cdk-q4" value="b"><span>本番パスワードをcdk.jsonへ保存</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="cdk-q4" value="c"><span>環境別の型付き設定を同じConstructへ注入</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="cdk-q4" value="d"><span>cdk.jsonとcdk.context.jsonをソース管理</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 各アカウント・リージョンをBootstrapする</h3>
+            <div class="ct-copy"><p>CDKでデプロイするAWS環境は事前にBootstrapします。Bootstrap Stackは、アセット用S3バケット、ECR、デプロイロールなど、CDKがデプロイに利用する基盤を作ります。対象となるアカウントとリージョンの組み合わせごとに必要です。</p><p>クロスアカウントのCDK Pipelinesでは、中央ツールアカウントのパイプラインが対象環境のデプロイロールを引き受けられるよう、信頼関係を含めてBootstrapします。開発端末の長期アクセスキーではなく、IAM Identity CenterやCI用ロールなど短期認証情報を利用します。</p></div>
+            <pre class="tb-code mt-5"><code>cdk bootstrap aws://111111111111/ap-northeast-1
+cdk bootstrap aws://222222222222/ap-northeast-1 \
+  --trust 999999999999 \
+  --cloudformation-execution-policies arn:aws:iam::aws:policy/AdministratorAccess</code></pre>
+            <div class="ct-note"><strong>例をそのまま本番利用しない：</strong>上の管理ポリシーは説明用です。実運用では、パイプラインが必要とするCloudFormation実行権限を組織のリスク基準に合わせて制限します。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/cdk/v2/guide/bootstrapping-env.html" target="_blank" rel="noopener">CDK環境のBootstrap</a></p>
+            <div data-quiz data-id="cdk-q5" data-answer="d" data-explanation="CDKを配備する各アカウント・リージョンをBootstrapし、クロスアカウントではパイプラインへの信頼も構成します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q5. DevとProdが別アカウントにある場合の事前準備は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="cdk-q5" value="a"><span>Prodだけ手作業でリソースを作る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q5" value="b"><span>全員へroot認証情報を配る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q5" value="c"><span>1回だけローカルでcdk synthする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q5" value="d"><span>各アカウント・リージョンをBootstrapし、必要な信頼を設定する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.3 ドリフトと手動変更を統制する</h3>
+            <div class="ct-copy"><p>Gitにコードを置いても、コンソールから直接変更できる権限が残っていれば、実環境とコードは再び食い違います。通常変更はマージリクエストとパイプラインだけに限定し、緊急変更は期限付き権限と事後コード反映を必須にします。</p><p>「誰が何を変えたか」は、Gitコミットとレビューだけでなく、CodePipeline実行履歴、CloudFormation Stackイベント、CloudTrailを関連付けます。CloudFormationのドリフト検出やAWS Configも利用し、コード外の変更を検出します。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>問い</th><th>主な証跡・制御</th></tr></thead><tbody><tr><th>誰がコードを変えたか</th><td>Git commit、Merge Request、CODEOWNERS</td></tr><tr><th>誰が承認したか</th><td>GitLab承認、ManualApprovalStep、CodePipeline履歴</td></tr><tr><th>AWSで何が変わったか</th><td>CloudFormationイベント、CloudTrail</td></tr><tr><th>コード外の変更はないか</th><td>ドリフト検出、AWS Config、権限制御</td></tr></tbody></table></div>
+            <div data-quiz data-id="cdk-q6" data-answer="c" data-explanation="Gitだけではコンソール変更を追い切れません。権限を制限し、CloudTrail・CloudFormation・ドリフト検出を組み合わせます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q6. Git管理開始後も環境差異が再発した。優先する対策は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="cdk-q6" value="a"><span>コンソール変更を続け、後から口頭共有する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q6" value="b"><span>cdk.context.jsonを削除し続ける</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q6" value="c"><span>通常変更をパイプラインへ限定し、CloudTrailとドリフトを監視する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q6" value="d"><span>全環境を同じAWSアカウントへ移す</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="delivery" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：GitLabとCDK Pipelinesで変更を昇格する</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 GitLabからCodeConnectionsで取り込む</h3>
+            <div class="ct-copy"><p>CDK Pipelinesの <code>CodePipeline</code>エンジンを使う場合、GitLab.comまたはGitLab Self-ManagedをAWS CodeConnectionsでCodePipelineのソースアクションへ接続できます。GitLab Self-Managedではホストリソースも必要です。利用可能リージョンと接続権限を事前確認します。</p><p>マージリクエストではlint、単体テスト、CDK assertions、<code>cdk synth</code>、ポリシー検査、<code>cdk diff</code>を実行します。mainへのマージ後にDevへ自動デプロイし、検証後にStaging、承認後にProdへ昇格させます。</p></div>
+            <div class="ct-flow"><div><small>GITLAB</small><strong>Push / Merge Request</strong><p>レビューとブランチ保護</p></div><div><small>CODECONNECTIONS</small><strong>Source action</strong><p>リポジトリ変更をCodePipelineへ</p></div><div><small>CDK PIPELINES</small><strong>Self-mutation</strong><p>Stage追加もパイプラインへ反映</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/codepipeline/latest/userguide/integrations-action-type.html" target="_blank" rel="noopener">CodePipelineとGitLabの接続</a>、<a href="https://docs.aws.amazon.com/cdk/v2/guide/cdk-pipeline.html" target="_blank" rel="noopener">CDK Pipelines</a></p>
+            <div data-quiz data-id="cdk-q7" data-answer="a" data-explanation="GitLabはAWS CodeConnectionsの接続を使い、CodePipelineのソースアクションとしてCDK Pipelinesへ渡します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q7. GitLabリポジトリをCodePipelineベースのCDK Pipelinesへ接続する代表的な方式は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="cdk-q7" value="a"><span>AWS CodeConnectionsのGitLab接続</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q7" value="b"><span>EventBridge Schedulerで毎分clone</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q7" value="c"><span>S3 Transfer Acceleration</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q7" value="d"><span>VPC Peering</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 本番前に自動検証と手動承認を置く</h3>
+            <div class="ct-copy"><p>CDK PipelinesはStageの前後へShellStepやManualApprovalStepを追加できます。Stagingデプロイ後に疎通・統合テストを行い、Prod Stageの前に承認を置けば、検証結果と変更内容を確認してから本番へ進めます。</p><p>さらに <code>ConfirmPermissionsBroadening</code>を使うと、IAM権限やセキュリティグループ規則が広がる変更だけを人へ回すゲートを構成できます。承認URL、コメント、SNS通知も設定できます。</p></div>
+            <pre class="tb-code mt-5"><code>pipeline.addStage(staging, {
+  post: [new pipelines.ShellStep('SmokeTest', { commands: ['npm run smoke'] })]
+});
+
+pipeline.addStage(prod, {
+  pre: [new pipelines.ManualApprovalStep('ApproveProduction')]
+});</code></pre>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.pipelines-readme.html" target="_blank" rel="noopener">CDK Pipelinesの検証ステップ</a></p>
+            <div data-quiz data-multiple data-id="cdk-q8" data-answer="a,c,d" data-explanation="Staging後の自動テスト、Prod前のManualApprovalStep、権限拡大検査を組み合わせます。チャットの口頭承認だけではパイプラインのゲートになりません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q8. 本番反映を安全にするステップを3つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="cdk-q8" value="a"><span>Stagingデプロイ後の自動テスト</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="cdk-q8" value="b"><span>mainへ直接pushし、即時Prodへ展開</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="cdk-q8" value="c"><span>Prod Stage前のManualApprovalStep</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="cdk-q8" value="d"><span>権限拡大や変更セットのレビュー</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.3 選択肢を公平に比較する</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>方式</th><th>強み</th><th>今回の評価</th></tr></thead><tbody><tr><th>AWS CDK</th><td>Python／TypeScript、Construct、CloudFormation統合</td><td>AWS専用・既存スキル活用の要件へ最も適合</td></tr><tr><th>CloudFormation</th><td>AWSネイティブな宣言型IaC、変更セット、ロールバック</td><td>CI/CDを組めば十分有力。提示案の手動運用が弱点</td></tr><tr><th>Terraform</th><td>マルチクラウド、豊富なProviderとModule</td><td>実務上は有力。HCL・State・追加基盤を受け入れる判断が必要</td></tr><tr><th>Lambda＋SDK</th><td>特殊な命令的処理を自由に実装</td><td>宣言状態、差分、ドリフト、ロールバックを自作するため不適</td></tr></tbody></table></div>
+            <div class="ct-note"><strong>試験問題と実務判断を分けます。</strong>Terraform案も多くの要件を満たせます。この設問ではAWSのみ、Python／TypeScript経験、AWSネイティブ統合、Construct再利用が明示されているためCDKが最も自然です。CloudFormation案の問題もJSONそのものではなく、手動デプロイと仕組み化されていない承認です。</div>
+            <div data-quiz data-id="cdk-q9" data-answer="b" data-explanation="CloudFormationもIaCとして有効です。提示案が不適切なのは、手動CLIとチャット記録に依存し、レビューと自動化をパイプラインへ組み込んでいないためです。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q9. CloudFormationの選択肢が今回劣る本質的な理由は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="cdk-q9" value="a"><span>CloudFormationではAWSリソースを作れない</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q9" value="b"><span>提示案が手動デプロイと手作業の承認記録に依存する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q9" value="c"><span>CloudFormationは変更セットを作れない</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q9" value="d"><span>CloudFormationはGitで管理できない</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：手作業の複数環境をIaCへ移行する</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <div class="ct-copy"><p>開発・検証・本番が別アカウントにあり、現在はコンソールで手作業しています。チームはPythonとTypeScriptに習熟し、再利用、変更履歴、事前レビュー、自動デプロイを必要としています。</p><p>最初からすべてを書き直すのではなく、所有境界を決め、既存リソースのインポート可否を確認し、低リスクな環境から移行します。標準Construct、環境別Stage、テスト、承認、ドリフト検出を段階的に導入します。</p></div>
+          <div data-quiz data-id="cdk-q10" data-answer="a" data-explanation="チームの既存言語スキルとAWS専用要件を活かし、Constructで再利用、GitLabでレビュー、CDK Pipelinesで複数環境へ承認付きデプロイする案が最も適合します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q10. 要件に最も適合するソリューションは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="cdk-q10" value="a"><span>AWS CDKをPython／TypeScriptで記述し、GitLabと承認付きCDK Pipelinesで展開</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q10" value="b"><span>JSON CloudFormationをGit管理し、担当者が手動CLIで展開</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q10" value="c"><span>Terraform Cloudを採用することだけを理由なく必須とする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="cdk-q10" value="d"><span>EventBridge SchedulerとLambdaのSDK呼び出しで命令的に作成</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          <div class="ct-note"><strong>覚え方：</strong>「部品」はConstruct。「配備単位」はStack。「環境のまとまり」はStage。「生成」はsynth。「事前差分」はdiff。「AWSへの適用」はCloudFormation。「昇格と承認」はPipelineです。</div>
+        </div>
+      </section>
+    </article>
+
+    <section class="mt-12"><h2 class="text-xl font-bold text-sky-950 mb-4">次のステップ</h2><div class="tb-card p-5 sm:p-6"><ul class="space-y-3 text-sm text-slate-700"><li><a class="text-sky-700 underline" href="iam.html">IAM</a>：クロスアカウントロールと最小権限を理解する。</li><li><a class="text-sky-700 underline" href="cloudtrail.html">AWS CloudTrail</a>：AWS APIの変更証跡を追跡する。</li><li><a class="text-sky-700 underline" href="service-quotas.html">AWS Service Quotas</a>：環境展開前に上限を検証する。</li><li><a class="text-sky-700 underline" href="https://docs.aws.amazon.com/cdk/v2/guide/" target="_blank" rel="noopener">AWS公式：AWS CDK Developer Guide</a></li></ul></div></section>
+    <div class="mt-10 text-center"><a href="../../../index.html" class="inline-block rounded-full bg-white text-sky-700 ring-1 ring-sky-200 px-6 py-3 text-sm font-semibold shadow-sm">← 通常版の教材一覧へ</a></div>
+  </main>
+  <footer class="text-center text-xs text-slate-400 pb-10">Engineer Textbook · AWS CDK · 公式資料確認：2026-10-29</footer>
+  <script src="../../../assets/shared.js?v=20261029-13"></script>
+</body>
+</html>

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ja" data-topic-id="cloud-aws-vpc-flow-logs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="AWS VPCフローログを、基礎・読み方・運用・障害調査までインタラクティブに学べる教材です。">
+<title>VPCフローログ | Engineer Textbook</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="../../../assets/shared.css">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 tracking-tight whitespace-nowrap">
+        <span class="inline-block align-middle" aria-hidden="true">📘</span> Engineer Textbook
+      </a>
+      <span class="mx-1 text-slate-300">/</span>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"VPCフローログ"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <a href="../../../quick/index.html#vpc-flow-logs" style="display:inline-block;margin-bottom:20px;padding:8px 14px;background:#fff;border:1px solid #dce4ec;border-radius:6px;color:#1763c2;font-size:13px;text-decoration:none">← このテーマを約2〜3分で復習する</a>
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap items-center gap-2 mb-4">
+          <span class="tb-badge">AWSネットワーク</span>
+          <span class="tb-badge is-basic">基礎</span>
+          <span class="tb-badge is-applied">応用</span>
+          <span class="tb-badge is-prac">実務</span>
+        </div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">VPCフローログ</h1>
+        <p class="mt-3 text-sky-800/80 text-base sm:text-lg max-w-3xl">「誰が・どこへ・どのポートで・許可されたか」を読み解き、ネットワーク障害の切り分けに使えるようになる教材です。</p>
+
+        <div class="tb-card mt-8 p-5 sm:p-7">
+          <div class="flex items-center gap-2 mb-3"><span class="text-sky-700" aria-hidden="true">🎯</span><span class="font-semibold text-sky-900">この教材で学べること</span></div>
+          <ul class="space-y-2 text-[15px] text-slate-700 marker:text-sky-500 list-disc pl-5">
+            <li>VPCフローログが記録するもの・記録しないものを説明できます。</li>
+            <li>ログ1行を分解し、通信の方向・ポート・ACCEPT / REJECTを判断できます。</li>
+            <li>CloudWatch LogsやS3を使った、実務的な調査・保管方針を設計できます。</li>
+          </ul>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-6">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-semibold text-sky-900 text-sm">学習進捗</span>
+            <div class="flex items-center gap-3"><span data-progress-pct class="text-sky-700 font-semibold text-sm">0%</span><button data-progress-reset class="text-xs text-slate-500 hover:text-sky-700 underline-offset-2 hover:underline">リセット</button></div>
+          </div>
+          <div class="tb-progress"><div data-progress-bar style="width:0%"></div></div>
+          <p class="mt-2 text-xs text-slate-500">設問への回答状況をこのブラウザに自動保存します。</p>
+        </div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section>
+        <div class="flex items-center gap-3 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編</h2><span class="tb-badge is-basic">基礎</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 VPCフローログとは</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">VPCフローログ（VPC Flow Logs）は、VPC内のネットワークインターフェイス（ENI）を出入りするIP通信の情報を収集するAWS機能です。対象にはVPC全体、サブネット、個別ENIを選べます。VPCまたはサブネットを対象にすると、配下のENIがまとめて監視されます。</p>
+
+            <div class="grid sm:grid-cols-3 gap-3 mt-5" aria-label="VPCフローログの処理の流れ">
+              <div class="rounded-2xl bg-sky-50/70 p-4"><div class="text-xs font-semibold text-sky-600">01 CAPTURE</div><div class="font-bold text-sky-900 mt-1">ENIで観測</div><p class="text-xs text-slate-600 mt-1">IPフローのメタデータを収集</p></div>
+              <div class="rounded-2xl bg-sky-50/70 p-4"><div class="text-xs font-semibold text-sky-600">02 AGGREGATE</div><div class="font-bold text-sky-900 mt-1">時間窓で集約</div><p class="text-xs text-slate-600 mt-1">同じフローを1行へまとめる</p></div>
+              <div class="rounded-2xl bg-sky-50/70 p-4"><div class="text-xs font-semibold text-sky-600">03 PUBLISH</div><div class="font-bold text-sky-900 mt-1">保存先へ配信</div><p class="text-xs text-slate-600 mt-1">CloudWatch Logs / S3 / Firehose</p></div>
+            </div>
+
+            <div class="mt-5 rounded-2xl bg-blue-50/80 p-4 text-sm text-slate-700"><strong class="text-sky-900">大事な見方：</strong>フローログはパケットキャプチャではありません。HTTP本文、SQL、認証トークンなどのペイロードは記録せず、通信のメタデータを記録します。収集は通信経路の外側で行われるため、ネットワークのスループットやレイテンシーには影響しません。</div>
+
+            <div data-quiz data-id="q-definition" data-answer="b" data-explanation="フローログはIP通信のメタデータを記録します。アプリケーションの本文やパケット内容を見る仕組みではありません。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q1. VPCフローログが主に記録するものはどれですか？</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="radio" name="q1" value="a"><span>HTTPリクエスト本文</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="q1" value="b"><span>送信元・宛先・ポート・許可/拒否などの通信メタデータ</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="q1" value="c"><span>EC2内のアプリケーションログ</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="q1" value="d"><span>IAMユーザーの操作履歴</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 1行は「通信フロー」の要約</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">標準形式はスペース区切りで、バージョン2の14フィールドを持ちます。中心となるのは送信元IP、宛先IP、送信元ポート、宛先ポート、プロトコルという5つの組み合わせ（5-tuple）です。同じENI上の同じフローを集約期間ごとに1レコードへまとめます。</p>
+
+            <div class="mt-5 overflow-x-auto">
+              <table class="w-full text-sm min-w-[680px]">
+                <thead class="text-sky-700 bg-sky-50"><tr><th class="text-left p-3 rounded-l-xl">観点</th><th class="text-left p-3">代表フィールド</th><th class="text-left p-3 rounded-r-xl">読み取れること</th></tr></thead>
+                <tbody class="text-slate-700 divide-y divide-sky-100">
+                  <tr><td class="p-3 font-semibold">どこで</td><td class="p-3 font-mono text-xs">interface-id</td><td class="p-3">観測したENI</td></tr>
+                  <tr><td class="p-3 font-semibold">誰から誰へ</td><td class="p-3 font-mono text-xs">srcaddr / dstaddr</td><td class="p-3">送信元・宛先IP</td></tr>
+                  <tr><td class="p-3 font-semibold">何の通信</td><td class="p-3 font-mono text-xs">srcport / dstport / protocol</td><td class="p-3">ポートとIPプロトコル番号</td></tr>
+                  <tr><td class="p-3 font-semibold">どれだけ</td><td class="p-3 font-mono text-xs">packets / bytes</td><td class="p-3">集約期間内のパケット数・バイト数</td></tr>
+                  <tr><td class="p-3 font-semibold">どうなった</td><td class="p-3 font-mono text-xs">action / log-status</td><td class="p-3">許可・拒否、記録状態</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div data-fill data-id="q-five-tuple" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <p class="leading-relaxed text-slate-700">送信元IP・宛先IP・送信元ポート・宛先ポートと組み合わせる5つ目の要素は、IP <span class="tb-fill"><input data-answer="プロトコル|protocol" aria-label="5-tupleの5つ目" placeholder="???"></span> です。</p>
+              <button data-fill-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.3 ACCEPT / REJECTを正しく読む</h3>
+            <div class="grid sm:grid-cols-2 gap-4 mt-4">
+              <div class="rounded-2xl bg-sky-50/60 p-5"><div class="font-bold text-sky-900">ACCEPT</div><p class="text-sm text-slate-700 mt-2">観測地点のセキュリティグループやネットワークACLなどで、通信が許可されたことを示します。ただしアプリケーションが正常応答した保証ではありません。</p></div>
+              <div class="rounded-2xl bg-sky-50/60 p-5"><div class="font-bold text-sky-900">REJECT</div><p class="text-sm text-slate-700 mt-2">通信が拒否されたことを示します。REJECTという1語だけで、どのルールが原因かまでは特定できません。周辺設定との照合が必要です。</p></div>
+            </div>
+            <details class="tb-accordion mt-4"><summary>よくある誤解：ACCEPTなら接続成功？</summary><div class="tb-accordion-body">いいえ。ACCEPTでも、アプリが待ち受けていない、OSファイアウォールで止まる、応答経路がない、TLSで失敗する、といった問題は残ります。フローログは「ネットワーク調査の重要な証拠」であって、単独で全原因を説明するログではありません。</div></details>
+
+            <div data-quiz data-id="q-accept" data-answer="c" data-explanation="ACCEPTは観測地点での許可を示しますが、アプリケーション層の成功までは保証しません。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q2. action=ACCEPTから断定できることはどれですか？</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="radio" name="q2" value="a"><span>HTTPステータス200が返った</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="q2" value="b"><span>TLS証明書が正しい</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="q2" value="c"><span>観測地点では通信がネットワーク制御を通過した</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="q2" value="d"><span>アプリケーション処理が完了した</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center gap-3 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編</h2><span class="tb-badge is-applied">応用</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 ログを実際に分解する</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">次の標準形式のサンプルを編集し、「解析する」を押してください。プロトコル番号6はTCP、17はUDP、1はICMPです。時刻はUnix秒で記録されます。</p>
+
+            <div data-flow-decoder class="flow-decoder mt-5">
+              <label for="flow-log-input" class="block text-sm font-semibold text-sky-900 mb-2">標準形式のフローログ（14フィールド）</label>
+              <textarea id="flow-log-input" data-flow-input rows="4" class="w-full rounded-2xl bg-sky-50 border-0 p-4 font-mono text-xs sm:text-sm text-slate-700 outline-none focus:ring-2 focus:ring-sky-300">2 123456789012 eni-0abc123def456 10.0.1.25 10.0.2.80 49152 443 6 12 8400 1793232000 1793232060 ACCEPT OK</textarea>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <button data-flow-submit class="rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">解析する</button>
+                <button data-flow-reject-example class="rounded-full bg-white text-sky-700 ring-1 ring-sky-200 hover:ring-sky-300 px-5 py-2 text-sm font-semibold">REJECT例を表示</button>
+              </div>
+              <div data-flow-result class="mt-4" aria-live="polite"></div>
+            </div>
+
+            <div data-quiz data-id="q-read-log" data-answer="a,c,d" data-multiple data-explanation="この行はTCP(6)で10.0.1.25から10.0.2.80の443番へ向かい、ACCEPTされています。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q3. 初期表示のサンプルから読み取れる内容をすべて選んでください。</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="checkbox" name="q3" value="a"><span>宛先ポートは443</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="q3" value="b"><span>UDP通信である</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="q3" value="c"><span>通信はACCEPTされた</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="q3" value="d"><span>送信元IPは10.0.1.25</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 対象・トラフィック種別・保存先を選ぶ</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">作成時には「どのリソースを見るか」「ACCEPT / REJECT / ALLのどれを収集するか」「どこへ配信するか」を決めます。最適解は目的によって変わります。</p>
+            <div class="grid md:grid-cols-3 gap-4 mt-5">
+              <div class="rounded-2xl bg-sky-50/60 p-5"><div class="font-bold text-sky-900">CloudWatch Logs</div><p class="text-sm text-slate-700 mt-2">Logs Insightsで素早く検索し、メトリクスフィルターやアラームへつなげやすい選択です。</p></div>
+              <div class="rounded-2xl bg-sky-50/60 p-5"><div class="font-bold text-sky-900">Amazon S3</div><p class="text-sm text-slate-700 mt-2">長期保管や大量分析に向きます。Parquet形式とAthenaを組み合わせると効率的です。</p></div>
+              <div class="rounded-2xl bg-sky-50/60 p-5"><div class="font-bold text-sky-900">Data Firehose</div><p class="text-sm text-slate-700 mt-2">ストリーミング配信や外部分析基盤への中継など、継続的なパイプラインに向きます。</p></div>
+            </div>
+            <details class="tb-accordion mt-4"><summary>設計のコツ：ALLを永久に保存する？</summary><div class="tb-accordion-body">ALLは調査材料が多い一方、ログ量と費用も増えます。調査速度が重要なワークロードはCloudWatch Logs、長期監査や横断分析はS3というように、保持期間と分析目的を先に決めましょう。必要なら複数のフローログサブスクリプションを目的別に作れます。</div></details>
+
+            <div data-quiz data-id="q-destination" data-answer="b" data-explanation="大量ログの長期保管とAthena分析には、S3とParquetの組み合わせが適しています。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q4. 1年分を低コスト寄りに保管し、必要時にAthenaで分析したい場合の第一候補は？</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="radio" name="q4" value="a"><span>CloudWatch Logsだけに無期限保存</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="q4" value="b"><span>Amazon S3へParquet形式で配信</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="q4" value="c"><span>EC2のローカルディスクへ保存</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="q4" value="d"><span>CloudTrailへ配信</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.3 集約期間と配信遅延</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">最大集約期間は通常1分または10分から選びます。1分は調査の粒度が上がる一方、レコード数が増えます。Nitroベースのインスタンスへ接続されたENIでは、設定値にかかわらず集約期間が1分以下になる場合があります。</p>
+            <div class="mt-4 rounded-2xl bg-blue-50/80 p-4 text-sm text-slate-700"><strong class="text-sky-900">リアルタイムではありません。</strong> 収集後に処理と配信の時間が必要です。AWS公式では通常の目安としてCloudWatch Logsは約5分、S3は約10分とされていますが、配信はベストエフォートで、さらに遅れることがあります。</div>
+
+            <div data-quiz data-id="q-interval" data-answer="c" data-explanation="集約期間を短くすると粒度が上がる一方、一般にレコード数と処理・保存コストが増えます。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q5. 最大集約期間を10分から1分へ短くしたときの一般的な影響は？</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="radio" name="q5" value="a"><span>HTTP本文まで記録される</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="q5" value="b"><span>ネットワーク遅延が大幅に増える</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="q5" value="c"><span>時間粒度が上がり、レコード数は増えやすい</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="q5" value="d"><span>REJECTだけが記録される</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.4 カスタム形式と、記録されない通信</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">カスタム形式では必要なフィールドだけを選び、順序も指定できます。NATやEKSなど中間レイヤーがある環境では、<code class="font-mono text-xs bg-sky-50 px-2 py-1 rounded-lg">pkt-srcaddr</code> / <code class="font-mono text-xs bg-sky-50 px-2 py-1 rounded-lg">pkt-dstaddr</code>、方向を示す<code class="font-mono text-xs bg-sky-50 px-2 py-1 rounded-lg">flow-direction</code>が役立ちます。</p>
+            <div class="mt-5 grid sm:grid-cols-2 gap-4">
+              <div class="rounded-2xl bg-sky-50/60 p-5"><div class="font-bold text-sky-900">記録されない代表例</div><ul class="mt-3 space-y-2 text-sm text-slate-700 list-disc pl-5"><li>Amazon提供DNSへの問い合わせ</li><li>インスタンスメタデータ（169.254.169.254）</li><li>Amazon Time Sync Service</li><li>DHCP、ARP、既定VPCルーターの予約IP</li></ul></div>
+              <div class="rounded-2xl bg-sky-50/60 p-5"><div class="font-bold text-sky-900">品質上の注意</div><ul class="mt-3 space-y-2 text-sm text-slate-700 list-disc pl-5"><li>一部レコードがSKIPされる可能性</li><li>配信遅延が発生する可能性</li><li>非該当フィールドは「-」になる</li><li>メタデータ系フィールドはベストエフォート</li></ul></div>
+            </div>
+
+            <div data-quiz data-id="q-limitations" data-answer="a,c,d" data-multiple data-explanation="Amazon提供DNS、メタデータ、ARPなどはVPCフローログの対象外です。自前DNSサーバーへの通信は記録対象になります。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q6. 通常、VPCフローログに記録されない通信をすべて選んでください。</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="checkbox" name="q6" value="a"><span>169.254.169.254へのメタデータアクセス</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="q6" value="b"><span>EC2から外部APIへのHTTPS通信</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="q6" value="c"><span>ARP通信</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="q6" value="d"><span>Amazon提供DNSへの問い合わせ</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center gap-3 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編</h2><span class="tb-badge is-prac">実務</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 最初の運用設計</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">本番環境では「とりあえず有効化」で終わらせず、調査目的、対象、保持期間、アクセス権、費用をセットで決めます。次の順序で設計すると抜け漏れを減らせます。</p>
+            <div class="mt-5 rounded-2xl bg-sky-50/60 p-5">
+              <ul data-sortable data-answer="a,b,c,d,e" class="tb-sortable">
+                <li data-id="c">収集対象とACCEPT / REJECT / ALLを決める</li>
+                <li data-id="a">障害調査・監査・分析などの目的を決める</li>
+                <li data-id="e">クエリ、アラート、費用を定期レビューする</li>
+                <li data-id="b">必要な時間粒度と保持期間を決める</li>
+                <li data-id="d">配信先、暗号化、閲覧権限を設定する</li>
+              </ul>
+              <p data-sortable-feedback class="text-sm mt-3 text-slate-500">カードをドラッグして、設計の流れに並べ替えてください。</p>
+            </div>
+            <details class="tb-accordion mt-4"><summary>実務の初期案</summary><div class="tb-accordion-body">重要VPCはALLで可視化し、調査用はCloudWatch Logsに短〜中期保存、長期保管はS3に集約する構成が考えられます。ただし、ログ量と保持要件は組織ごとに異なります。目的のない全量・長期保存は避け、ライフサイクルポリシーも設定しましょう。</div></details>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 接続できないときの調査手順</h3>
+            <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+              <div class="rounded-2xl bg-sky-50/60 p-4"><div class="text-xs text-sky-600 font-semibold">STEP 1</div><div class="font-bold text-sky-900 mt-1">観測点を特定</div><p class="text-xs text-slate-600 mt-1">対象ENIと通信方向を確認</p></div>
+              <div class="rounded-2xl bg-sky-50/60 p-4"><div class="text-xs text-sky-600 font-semibold">STEP 2</div><div class="font-bold text-sky-900 mt-1">時間を絞る</div><p class="text-xs text-slate-600 mt-1">事象時刻の前後を検索</p></div>
+              <div class="rounded-2xl bg-sky-50/60 p-4"><div class="text-xs text-sky-600 font-semibold">STEP 3</div><div class="font-bold text-sky-900 mt-1">フローを絞る</div><p class="text-xs text-slate-600 mt-1">IP・ポート・actionで抽出</p></div>
+              <div class="rounded-2xl bg-sky-50/60 p-4"><div class="text-xs text-sky-600 font-semibold">STEP 4</div><div class="font-bold text-sky-900 mt-1">周辺設定と照合</div><p class="text-xs text-slate-600 mt-1">SG・NACL・経路・OS・アプリ</p></div>
+            </div>
+
+            <div class="mt-5">
+              <div class="text-sm font-semibold text-sky-900 mb-2">CloudWatch Logs Insights例（標準形式をparse）</div>
+              <pre class="tb-code"><code>fields @timestamp, @message
+| parse @message "* * * * * * * * * * * * * *"
+  as version, accountId, interfaceId, srcAddr, dstAddr,
+     srcPort, dstPort, protocol, packets, bytes,
+     startTime, endTime, action, logStatus
+| filter interfaceId = "eni-0abc123def456"
+| filter dstPort = 443 and action = "REJECT"
+| sort @timestamp desc
+| limit 50</code></pre>
+            </div>
+            <div class="mt-4 rounded-2xl bg-blue-50/80 p-4 text-sm text-slate-700"><strong class="text-sky-900">戻り通信も確認：</strong>片方向の行だけで結論を出さず、逆方向のフロー、TCPフラグ、別ENIのログも見ます。NAT Gatewayやロードバランサーを通ると観測点が増えるため、各ホップを追う意識が重要です。</div>
+
+            <div data-quiz data-id="q-troubleshoot" data-answer="b" data-explanation="ACCEPTがあるなら、次は待ち受けポート、OSファイアウォール、アプリログ、戻り経路などを確認します。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q7. 443番へのフローがACCEPTなのに接続できません。次に確認すべきものは？</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="radio" name="q7" value="a"><span>ACCEPTなので調査を終了する</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="q7" value="b"><span>アプリの待ち受け、OS制御、戻り経路、アプリログ</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="q7" value="c"><span>IAMユーザーのパスワード</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="q7" value="d"><span>S3のライフサイクルルールだけ</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.3 セキュリティ監視とコスト管理</h3>
+            <div class="grid sm:grid-cols-2 gap-4 mt-4">
+              <div class="rounded-2xl bg-sky-50/60 p-5"><div class="font-bold text-sky-900">監視の例</div><ul class="mt-3 space-y-2 text-sm text-slate-700 list-disc pl-5"><li>管理ポートへのREJECT急増</li><li>想定外の外向き宛先やポート</li><li>大容量のegress</li><li>既知の通信パターンからの逸脱</li></ul></div>
+              <div class="rounded-2xl bg-sky-50/60 p-5"><div class="font-bold text-sky-900">費用の抑え方</div><ul class="mt-3 space-y-2 text-sm text-slate-700 list-disc pl-5"><li>目的に合わせてフィールドを選ぶ</li><li>ログ保持期間を設定する</li><li>S3ではParquetとパーティションを使う</li><li>クエリ対象期間と列を絞る</li></ul></div>
+            </div>
+            <p class="text-sm text-slate-700 leading-relaxed mt-4">フローログの公開には、vended logsの取り込み・保存などに料金がかかります。アラートは単一イベントだけでなく「一定時間の増加率」や「通常との差」で設計すると、ノイズを抑えやすくなります。</p>
+
+            <div data-quiz data-id="q-security" data-answer="a,b,d" data-multiple data-explanation="保持期間、Parquet、クエリ範囲の最適化は費用管理に有効です。暗号化解除は推奨されません。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q8. コストと安全性を両立する施策をすべて選んでください。</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="checkbox" name="q8" value="a"><span>保持期間を要件に合わせて設定する</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="q8" value="b"><span>S3分析ではParquetを検討する</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="q8" value="c"><span>費用削減のため保存先の暗号化を外す</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="q8" value="d"><span>クエリ対象の期間・列を絞る</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center gap-3 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <h3 class="text-lg font-bold text-sky-900 mb-3">ケース：WebサーバーのHTTPSに接続できない</h3>
+          <p class="text-[15px] text-slate-700 leading-relaxed">利用者のIPは203.0.113.10、Webサーバーは10.0.2.80です。対象ENIのログには、203.0.113.10 → 10.0.2.80:443のREJECTが記録されています。アプリケーションログには到達記録がありません。</p>
+          <div class="mt-4 rounded-2xl bg-sky-50/60 p-5 text-sm text-slate-700"><strong class="text-sky-900">考える順序：</strong>まずREJECTがネットワーク層の手掛かりであることを確認し、対象ENIのセキュリティグループ、サブネットのネットワークACL、適用対象と通信方向を照合します。</div>
+
+          <div data-quiz data-id="q-case" data-answer="c" data-explanation="REJECTはネットワーク制御で拒否された手掛かりです。SGとNACLを対象・方向・ポート・送信元の条件で照合します。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+            <div class="font-semibold text-sky-900 mb-3">Q9. 最初の切り分けとして最も適切なのは？</div>
+            <ul class="space-y-2">
+              <li><label class="tb-quiz-option"><input type="radio" name="q9" value="a"><span>アプリケーションを再デプロイする</span></label></li>
+              <li><label class="tb-quiz-option"><input type="radio" name="q9" value="b"><span>データベースを再起動する</span></label></li>
+              <li><label class="tb-quiz-option"><input type="radio" name="q9" value="c"><span>対象ENIのSGとサブネットNACLを照合する</span></label></li>
+              <li><label class="tb-quiz-option"><input type="radio" name="q9" value="d"><span>フローログを無効化する</span></label></li>
+            </ul>
+            <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+          </div>
+
+          <details class="tb-accordion mt-5"><summary>模範的な調査メモ</summary><div class="tb-accordion-body">1) 事象時刻とENIを確定、2) src/dst/port/actionで対象行を抽出、3) 同時間帯の戻り通信も確認、4) SGのインバウンド443と送信元条件を確認、5) NACLの受信443と戻り用エフェメラルポートを両方向で確認、6) ACCEPTに変わった後も失敗するならOS・待ち受け・TLS・アプリログへ進む、という流れです。</div></details>
+        </div>
+      </section>
+      <section id="troubleshooting-additions" class="scroll-mt-28 mt-12">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">+</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">追加演習：ログが見えない場合とステートレスACL</h2></div>
+        <div class="grid md:grid-cols-2 gap-5">
+          <div class="tb-card p-5 sm:p-6"><h3 class="font-bold text-sky-900">Activeなのにロググループがない</h3><p class="ct-copy mt-3">CloudWatch Logs宛てでは、対象ENIでトラフィックが記録されて初めてロググループ／ストリームが作られます。作成直後は10分以上かかる場合もあるため、接続テストで通信を発生させ、配信を待ってからIAM配信ロールを確認します。</p><p class="ct-source">出典：<a href="https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs-troubleshooting.html" target="_blank" rel="noopener">VPC Flow Logsのトラブルシューティング</a></p></div>
+          <div class="tb-card p-5 sm:p-6"><h3 class="font-bold text-sky-900">HTTP要求は入るが応答が戻らない</h3><p class="ct-copy mt-3">セキュリティグループはステートフルですが、ネットワークACLはステートレスです。カスタムNACLでインバウンドTCP/80だけを許可しても、クライアントのエフェメラルポート宛てのアウトバウンド応答が拒否されれば接続は成立しません。OSの実際の範囲を確認して双方向を許可します。</p></div>
+        </div>
+        <div data-quiz data-multiple data-id="flow-q10" data-answer="a,c" data-explanation="ロググループは最初のトラフィック後に作られ、作成・配信には時間がかかる場合があります。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q10. Activeなフローログのロググループが見えない主な理由を2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="flow-q10" value="a"><span>対象ENIでまだトラフィックが発生していない</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="flow-q10" value="b"><span>AWS Configが有効である</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="flow-q10" value="c"><span>作成後の配信待ち時間が不足している</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="flow-q10" value="d"><span>X-Ray宛てに変更していない</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+      </section>
+    </article>
+
+    <section class="mt-16">
+      <h2 class="text-xl sm:text-2xl font-bold text-sky-950 mb-4"><span class="tb-section-num">▶</span>次のステップ</h2>
+      <div class="tb-card p-5 sm:p-6">
+        <ul class="space-y-3 text-[15px] text-slate-700">
+          <li><a class="text-sky-700 hover:text-sky-900 hover:underline" href="https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html" target="_blank" rel="noopener">AWS公式：VPC Flow Logs</a> — 概要、料金、作成・削除の入口</li>
+          <li><a class="text-sky-700 hover:text-sky-900 hover:underline" href="https://docs.aws.amazon.com/vpc/latest/userguide/flow-log-records.html" target="_blank" rel="noopener">AWS公式：Flow log records</a> — 全フィールドとバージョン</li>
+          <li><a class="text-sky-700 hover:text-sky-900 hover:underline" href="https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs-limitations.html" target="_blank" rel="noopener">AWS公式：Flow log limitations</a> — 記録対象外と制約</li>
+          <li><span class="font-semibold text-sky-900">関連学習：</span>セキュリティグループ、ネットワークACL、ルートテーブル、CloudWatch Logs Insights、Athena</li>
+        </ul>
+        <p class="mt-5 pt-4 border-t border-sky-100 text-xs text-slate-500">仕様確認日：2026-10-29。AWSサービスの仕様・料金は変更される可能性があるため、実運用時は公式ドキュメントも確認してください。</p>
+      </div>
+    </section>
+
+    <div class="mt-12 flex justify-center"><a href="../../../index.html" class="rounded-full bg-white text-sky-700 hover:text-sky-900 ring-1 ring-sky-200 px-6 py-3 text-sm font-semibold shadow-sm hover:shadow transition">← 教材トップへ戻る</a></div>
+  </main>
+
+  <footer class="text-center text-xs text-slate-400 pb-10">Engineer Textbook</footer>
+  <script src="../../../assets/shared.js"></script>
+</body>
+</html>

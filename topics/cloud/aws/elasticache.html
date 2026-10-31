@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ja" data-topic-id="cloud-aws-elasticache">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Amazon ElastiCacheを、キャッシュの基礎、エンジン選択、Redis OSSクラスターモード、オンラインリシャーディング、Multi-AZ、監視、障害対応まで学べるインタラクティブ教材です。">
+<title>Amazon ElastiCache | Engineer Textbook</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="../../../assets/shared.css">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 tracking-tight whitespace-nowrap"><span class="inline-block align-middle" aria-hidden="true">📘</span> Engineer Textbook</a>
+      <span class="mx-1 text-slate-300">/</span>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"Amazon ElastiCache"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <a href="../../../quick/index.html#elasticache" style="display:inline-block;margin-bottom:20px;padding:8px 14px;background:#fff;border:1px solid #dce4ec;border-radius:6px;color:#1763c2;font-size:13px;text-decoration:none">← このテーマを約2〜3分で復習する</a>
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap items-center gap-2 mb-4">
+          <span class="tb-badge">AWSデータストア</span>
+          <span class="tb-badge is-basic">基礎</span>
+          <span class="tb-badge is-applied">応用</span>
+          <span class="tb-badge is-prac">実務</span>
+        </div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">Amazon ElastiCache</h1>
+        <p class="mt-3 text-sky-800/80 text-base sm:text-lg max-w-3xl">データベースへの負荷を減らし、アプリの応答を速くする「インメモリキャッシュ」を、設計と運用の両面から学びます。</p>
+
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">今回のライトサイジング設問</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">2ノード・2AZの高可用構成は残し、オンライン垂直スケーリングで各ノードをxlargeからlargeへ変更します。</p>
+          <p class="text-[15px] text-slate-700 leading-relaxed mt-3">空きメモリ75%なら、使用量は現在容量のおよそ25%です。同じファミリーでxlargeからlargeへ容量が約半分になる場合、単純計算では縮小後の使用率は約50%になります。ただし、実行前にCPU・ネットワーク・接続数・メモリ予約分とピーク時の余裕を確認します。</p>
+          <div class="mt-5 grid sm:grid-cols-3 gap-3"><div class="rounded-2xl bg-sky-50/70 p-4"><div class="text-xs font-semibold text-sky-600">KEEP</div><div class="font-bold text-sky-900 mt-1">2 nodes / 2 AZs</div><p class="text-xs text-slate-600 mt-1">レプリカと自動フェイルオーバーを維持</p></div><div class="rounded-2xl bg-sky-50/70 p-4"><div class="text-xs font-semibold text-sky-600">CHANGE</div><div class="font-bold text-sky-900 mt-1">xlarge → large</div><p class="text-xs text-slate-600 mt-1">ノード当たりの容量と費用を縮小</p></div><div class="rounded-2xl bg-sky-50/70 p-4"><div class="text-xs font-semibold text-sky-600">VERIFY</div><div class="font-bold text-sky-900 mt-1">Headroom</div><p class="text-xs text-slate-600 mt-1">メモリ・CPU・帯域・レプリカ遅延</p></div></div>
+          <p class="mt-4 text-xs text-slate-500">出典：<a class="text-sky-700 hover:underline" href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/redis-cluster-vertical-scaling.html" target="_blank" rel="noopener">AWS公式：ノードタイプ変更によるオンライン垂直スケーリング</a></p>
+        </div>
+
+        <div class="tb-card mt-8 p-5 sm:p-7">
+          <div class="flex items-center gap-2 mb-3"><span class="text-sky-700" aria-hidden="true">🎯</span><span class="font-semibold text-sky-900">この教材で学べること</span></div>
+          <ul class="space-y-2 text-[15px] text-slate-700 marker:text-sky-500 list-disc pl-5">
+            <li>キャッシュヒット／ミスとCache-Asideパターンを説明できます。</li>
+            <li>Valkey・Redis OSS・Memcached、Serverless・ノードベースを要件から選べます。</li>
+            <li>TTL、可用性、セキュリティ、監視を含む本番運用を設計できます。</li>
+            <li>クラスターモードのシャード、オンラインリシャーディング、Multi-AZ自動フェイルオーバーを区別できます。</li>
+          </ul>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-6">
+          <div class="flex items-center justify-between mb-2"><span class="font-semibold text-sky-900 text-sm">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sky-700 font-semibold text-sm">0%</span><button data-progress-reset class="text-xs text-slate-500 hover:text-sky-700 underline-offset-2 hover:underline">リセット</button></div></div>
+          <div class="tb-progress"><div data-progress-bar style="width:0%"></div></div>
+          <p class="mt-2 text-xs text-slate-500">13問の回答状況をこのブラウザに自動保存します。既存問題の進捗は引き継がれます。</p>
+        </div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section>
+        <div class="flex items-center gap-3 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編</h2><span class="tb-badge is-basic">基礎</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 ElastiCacheとは</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">Amazon ElastiCacheは、クラウド上で分散インメモリデータストア／キャッシュを構築・運用するフルマネージドサービスです。頻繁に読むデータをメモリへ置くことで、ディスク中心のデータベースより短い応答時間を狙い、元データベースの読み取り負荷を減らします。</p>
+
+            <div class="mt-5 grid md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-3 items-center" aria-label="キャッシュを使った読み取り経路">
+              <div class="rounded-2xl bg-sky-50/70 p-4 text-center"><div class="text-xs font-semibold text-sky-600">CLIENT</div><div class="font-bold text-sky-900 mt-1">アプリ</div></div>
+              <div class="text-center text-sky-400 font-bold" aria-hidden="true">→</div>
+              <div class="rounded-2xl bg-sky-100/70 p-4 text-center"><div class="text-xs font-semibold text-sky-600">FAST PATH</div><div class="font-bold text-sky-900 mt-1">ElastiCache</div></div>
+              <div class="text-center text-sky-400 font-bold" aria-hidden="true">→ MISS →</div>
+              <div class="rounded-2xl bg-sky-50/70 p-4 text-center"><div class="text-xs font-semibold text-sky-600">SOURCE OF TRUTH</div><div class="font-bold text-sky-900 mt-1">RDS / DynamoDB等</div></div>
+            </div>
+
+            <div class="mt-5 rounded-2xl bg-blue-50/80 p-4 text-sm text-slate-700"><strong class="text-sky-900">基本原則：</strong>一般的なキャッシュ用途では、ElastiCacheのデータは消えても元データから再生成できるようにします。セッション、ランキング、Pub/Subなどデータストアとして使う場合は、要件に応じてレプリカ、バックアップ、永続性を別途設計します。</div>
+
+            <div data-quiz data-id="ec-q-definition" data-answer="b" data-explanation="ElastiCacheは高頻度データをメモリに置き、低レイテンシー化とバックエンド負荷軽減を狙うサービスです。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q1. ElastiCacheの代表的な目的はどれですか？</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq1" value="a"><span>静的WebサイトのHTMLを配信する</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq1" value="b"><span>高頻度データをメモリに置き、応答時間とDB負荷を改善する</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq1" value="c"><span>IAMユーザーを管理する</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq1" value="d"><span>VPCのパケット本文を保存する</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 ヒットとミスを体験する</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">最も基本的なCache-Aside（Lazy Loading）では、アプリが先にキャッシュを見ます。値があればキャッシュヒット、なければキャッシュミスです。ミス時だけ元DBを読み、取得した値をキャッシュへ保存します。</p>
+
+            <div data-cache-simulator class="cache-sim mt-5">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div><div class="font-bold text-sky-900">Cache-Asideシミュレーター</div><p class="text-xs text-slate-500 mt-1">同じ商品を繰り返し取得して、経路と速度の違いを確認します。</p></div>
+                <button data-cache-reset class="rounded-full bg-white text-sky-700 ring-1 ring-sky-200 px-4 py-2 text-sm font-semibold">リセット</button>
+              </div>
+              <div class="grid sm:grid-cols-2 gap-3 mt-4">
+                <button data-cache-request="product:blue" class="cache-sim-request">商品Blueを取得</button>
+                <button data-cache-request="product:navy" class="cache-sim-request">商品Navyを取得</button>
+              </div>
+              <div class="cache-sim-stats mt-4">
+                <div><span data-cache-requests>0</span><small>リクエスト</small></div>
+                <div><span data-cache-hits>0</span><small>ヒット</small></div>
+                <div><span data-cache-rate>0%</span><small>ヒット率</small></div>
+              </div>
+              <div data-cache-log class="cache-sim-log mt-4" aria-live="polite"><p>商品ボタンを押してください。</p></div>
+            </div>
+
+            <pre class="tb-code mt-5"><code>value = cache.get(key)
+if value is None:          # cache miss
+    value = database.load(key)
+    cache.set(key, value, ttl=300)
+return value</code></pre>
+
+            <div data-fill data-id="ec-q-hit" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <p class="leading-relaxed text-slate-700">キャッシュに値がなく、元DBを読みに行く状態をキャッシュ <span class="tb-fill"><input data-answer="ミス|miss|cache miss" aria-label="キャッシュに値がない状態" placeholder="???"></span> と呼びます。</p>
+              <button data-fill-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.3 3つのエンジンを選び分ける</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">ElastiCacheはValkey、Redis OSS、Memcachedをサポートします。いずれもインメモリのキー・バリューストアですが、データ構造、レプリケーション、永続化、マルチスレッド性能などが異なります。</p>
+            <div class="mt-5 overflow-x-auto">
+              <table class="w-full text-sm min-w-[720px]">
+                <thead class="text-sky-700 bg-sky-50"><tr><th class="text-left p-3 rounded-l-xl">観点</th><th class="text-left p-3">Valkey</th><th class="text-left p-3">Redis OSS</th><th class="text-left p-3 rounded-r-xl">Memcached</th></tr></thead>
+                <tbody class="text-slate-700 divide-y divide-sky-100">
+                  <tr><td class="p-3 font-semibold">モデル</td><td class="p-3">豊富なデータ型</td><td class="p-3">豊富なデータ型</td><td class="p-3">シンプルなオブジェクトキャッシュ</td></tr>
+                  <tr><td class="p-3 font-semibold">主な機能</td><td class="p-3">レプリカ、Pub/Sub、Sorted Set等</td><td class="p-3">レプリカ、Pub/Sub、Sorted Set等</td><td class="p-3">シンプルでマルチスレッド</td></tr>
+                  <tr><td class="p-3 font-semibold">水平分割</td><td class="p-3">クラスターモード</td><td class="p-3">クラスターモード</td><td class="p-3">クライアント側分散</td></tr>
+                  <tr><td class="p-3 font-semibold">向く用途</td><td class="p-3">新規の高機能キャッシュ</td><td class="p-3">既存互換性を重視</td><td class="p-3">単純な大規模キャッシュ</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <details class="tb-accordion mt-4"><summary>Valkeyとは？</summary><div class="tb-accordion-body">Valkeyはオープンソースのキー・バリューストアです。ElastiCacheではRedis OSS互換の選択肢として提供され、バージョンに応じてメモリ効率、検索、ベクトル検索などの機能が拡張されています。新規設計ではまずValkeyを候補にし、既存クライアントや機能要件との互換性を検証します。</div></details>
+
+            <div data-quiz data-id="ec-q-engine" data-answer="c" data-explanation="Sorted Set、Pub/Sub、レプリケーションなどを使うならValkeyまたはRedis OSSが適しています。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q2. リアルタイムランキングとPub/Subが必要です。第一候補は？</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq2" value="a"><span>Memcachedのみ</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq2" value="b"><span>Amazon S3</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq2" value="c"><span>ValkeyまたはRedis OSS</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq2" value="d"><span>VPCフローログ</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center gap-3 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編</h2><span class="tb-badge is-applied">応用</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 Serverlessとノードベース</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">ElastiCacheにはServerlessキャッシュとノードベースクラスターがあります。Serverlessは容量計画を減らして自動スケールさせたい場合、ノードベースはノード種別、シャード数、レプリカ数、配置、パラメーターを細かく制御したい場合に向きます。</p>
+            <div class="grid md:grid-cols-2 gap-4 mt-5">
+              <div class="rounded-2xl bg-sky-50/60 p-5"><div class="font-bold text-sky-900">Serverless</div><ul class="mt-3 space-y-2 text-sm text-slate-700 list-disc pl-5"><li>容量を自動管理・自動スケール</li><li>データを3つのAZへ冗長化</li><li>新規・予測困難な負荷に向く</li><li>保存量と処理量を軸に課金</li></ul></div>
+              <div class="rounded-2xl bg-sky-50/60 p-5"><div class="font-bold text-sky-900">ノードベース</div><ul class="mt-3 space-y-2 text-sm text-slate-700 list-disc pl-5"><li>ノードとトポロジーを指定</li><li>性能・可用性・費用を細かく調整</li><li>予測可能な負荷に向く</li><li>パラメーターや配置の自由度が高い</li></ul></div>
+            </div>
+
+            <div data-quiz data-id="ec-q-deployment" data-answer="a" data-explanation="負荷予測が難しく運用負担を減らしたい場合、Serverlessが自然な出発点です。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q3. 新規サービスでアクセス量が読めず、容量計画を最小化したい場合は？</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq3" value="a"><span>Serverlessキャッシュ</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq3" value="b"><span>単一AZ・単一ノード固定</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq3" value="c"><span>EC2上で手動運用のみ</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq3" value="d"><span>キャッシュを使わない</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 シャード・レプリカ・Multi-AZ</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">Valkey／Redis OSSのノードベース構成では、書き込みを受けるプライマリと読み取りに使えるレプリカを組み合わせます。シャードはキー空間を分割して書き込み容量とメモリを水平拡張し、レプリカは読み取り分散と可用性に寄与します。</p>
+            <div class="mt-5 grid sm:grid-cols-3 gap-3">
+              <div class="rounded-2xl bg-sky-50/70 p-4"><div class="text-xs font-semibold text-sky-600">SHARD</div><div class="font-bold text-sky-900 mt-1">データを分割</div><p class="text-xs text-slate-600 mt-1">書き込みと容量を水平拡張</p></div>
+              <div class="rounded-2xl bg-sky-50/70 p-4"><div class="text-xs font-semibold text-sky-600">REPLICA</div><div class="font-bold text-sky-900 mt-1">データを複製</div><p class="text-xs text-slate-600 mt-1">読み取り分散と障害復旧</p></div>
+              <div class="rounded-2xl bg-sky-50/70 p-4"><div class="text-xs font-semibold text-sky-600">MULTI-AZ</div><div class="font-bold text-sky-900 mt-1">AZ障害へ備える</div><p class="text-xs text-slate-600 mt-1">別AZのレプリカへ自動フェイルオーバー</p></div>
+            </div>
+            <details class="tb-accordion mt-4"><summary>レプリカがあればデータ消失はゼロ？</summary><div class="tb-accordion-body">通常のレプリケーションは非同期なので、障害のタイミングによって直近の書き込みが失われる可能性があります。キャッシュとして許容できるかを確認し、厳密な永続性が必要なら元DBを正とするか、対応する耐久性機能を含め別の設計を検討します。</div></details>
+
+            <div data-quiz data-id="ec-q-topology" data-answer="a,c,d" data-multiple data-explanation="シャードは水平分割、レプリカは読み取り分散とフェイルオーバー、Multi-AZはAZ障害への耐性を高めます。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q4. 正しい説明をすべて選んでください。</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="checkbox" name="ecq4" value="a"><span>シャード追加はキー空間の水平分割に使える</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="ecq4" value="b"><span>レプリカは必ず同期複製である</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="ecq4" value="c"><span>レプリカは読み取り分散に使える</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="ecq4" value="d"><span>Multi-AZは別AZへの自動フェイルオーバーに役立つ</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.3 TTL・無効化・スタンピード対策</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">キャッシュ設計で難しいのは「入れること」より「いつ捨てるか」です。TTL（Time To Live）は鮮度とヒット率のバランスを決めます。更新時に削除する方式、更新と同時にキャッシュも書き換える方式などを、整合性要件から選びます。</p>
+            <div class="grid sm:grid-cols-3 gap-4 mt-5">
+              <div class="rounded-2xl bg-sky-50/60 p-4"><div class="font-bold text-sky-900">短いTTL</div><p class="text-sm text-slate-700 mt-2">鮮度は高いがミスが増え、DB負荷が上がりやすい。</p></div>
+              <div class="rounded-2xl bg-sky-50/60 p-4"><div class="font-bold text-sky-900">長いTTL</div><p class="text-sm text-slate-700 mt-2">ヒット率は上がるが、古い値を返すリスクが増える。</p></div>
+              <div class="rounded-2xl bg-sky-50/60 p-4"><div class="font-bold text-sky-900">TTLジッター</div><p class="text-sm text-slate-700 mt-2">有効期限を少し散らし、同時失効を避ける。</p></div>
+            </div>
+            <p class="text-sm text-slate-700 leading-relaxed mt-4"><strong class="text-sky-900">キャッシュスタンピード：</strong>人気キーが失効した瞬間、大量リクエストが同時にDBへ向かう現象です。TTLジッター、排他ロック、早期リフレッシュ、古い値の一時提供などで緩和します。</p>
+
+            <div data-quiz data-id="ec-q-ttl" data-answer="c" data-explanation="TTLを少しランダム化すると大量キーの同時失効を避け、DBへの瞬間負荷を平準化できます。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q5. 大量のキーが同時に失効してDB負荷が急増しました。まず検討する施策は？</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq5" value="a"><span>すべてのTTLを同じ秒数に固定する</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq5" value="b"><span>監視を止める</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq5" value="c"><span>TTLへジッターを加え、必要ならロックや早期更新も使う</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq5" value="d"><span>キャッシュキーをすべて同じにする</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.4 接続とセキュリティ</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">基本はアプリとキャッシュをネットワーク的に近づけ、必要な送信元だけをセキュリティグループで許可します。Valkey／Redis OSSのノードベースは通常6379、Serverlessは6379と6380、Memcachedは11211と11212を使用します。実際に必要なポートは構成とクライアントの仕様で確認してください。</p>
+            <div class="grid sm:grid-cols-2 gap-4 mt-5">
+              <div class="rounded-2xl bg-sky-50/60 p-5"><div class="font-bold text-sky-900">ネットワーク</div><ul class="mt-3 space-y-2 text-sm text-slate-700 list-disc pl-5"><li>送信元SGを参照して最小許可</li><li>名前解決可能なエンドポイントを使う</li><li>接続プールとタイムアウトを設定</li></ul></div>
+              <div class="rounded-2xl bg-sky-50/60 p-5"><div class="font-bold text-sky-900">認証・暗号化</div><ul class="mt-3 space-y-2 text-sm text-slate-700 list-disc pl-5"><li>転送中暗号化（TLS）</li><li>保存時暗号化</li><li>Valkey／Redis OSSのRBACやIAM認証</li></ul></div>
+            </div>
+            <details class="tb-accordion mt-4"><summary>Public Endpointは使える？</summary><div class="tb-accordion-body">現在は対応するValkey Serverless構成でPublic接続を選べます。Public EndpointはすべてIAM認証とTLS 1.3が必須です。利便性だけで選ばず、到達経路、認証、監査、レート制限を含めて評価してください。</div></details>
+
+            <div data-quiz data-id="ec-q-security" data-answer="a,b,d" data-multiple data-explanation="最小権限のSG、TLS、RBAC/IAM認証が基本です。0.0.0.0/0への開放は避けます。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q6. 推奨される対策をすべて選んでください。</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="checkbox" name="ecq6" value="a"><span>アプリのSGからだけ接続を許可する</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="ecq6" value="b"><span>TLSを有効化する</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="ecq6" value="c"><span>0.0.0.0/0へ無条件で開放する</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="ecq6" value="d"><span>RBACまたはIAM認証を要件に応じて使う</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center gap-3 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編</h2><span class="tb-badge is-prac">実務</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 設計は「何をキャッシュするか」から</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">サービス名から構成を選ぶのではなく、データの性質と失敗時の振る舞いから決めます。次のカードを設計順に並べ替えてください。</p>
+            <div class="mt-5 rounded-2xl bg-sky-50/60 p-5">
+              <ul data-sortable data-answer="a,b,c,d,e" class="tb-sortable">
+                <li data-id="d">可用性、暗号化、接続権限を設計する</li>
+                <li data-id="b">許容できる古さとTTL・無効化方式を決める</li>
+                <li data-id="e">メトリクスと障害時フォールバックを用意する</li>
+                <li data-id="a">対象データとキャッシュする目的を決める</li>
+                <li data-id="c">エンジンとServerless／ノードベースを選ぶ</li>
+              </ul>
+              <p data-sortable-feedback class="text-sm mt-3 text-slate-500">ドラッグ、または上下ボタンで並べ替えてください。</p>
+            </div>
+            <details class="tb-accordion mt-4"><summary>キャッシュに向くデータ</summary><div class="tb-accordion-body">読み取り頻度が高い、生成コストが高い、多少古くても許容できる、キーで一意に引けるデータは良い候補です。毎回変化する値、厳密な即時整合性が必要な値、巨大なオブジェクトは慎重に評価します。</div></details>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 監視するメトリクス</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">「CPUだけ」や瞬間的な空きメモリだけを見ると本質を外します。ヒット率、メモリ、退避、接続、遅延、レプリケーション、ネットワークを組み合わせ、アプリ側のレイテンシーとエラー率も並べて確認します。ライトサイジングでは平均値だけでなく、繁忙時間と季節ピークを含む期間で評価します。</p>
+            <div class="mt-5 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div class="rounded-2xl bg-sky-50/60 p-4"><div class="font-mono text-xs text-sky-700">DatabaseMemoryUsagePercentage</div><p class="text-sm text-slate-700 mt-2">データに使用しているmaxmemoryの割合</p></div>
+              <div class="rounded-2xl bg-sky-50/60 p-4"><div class="font-mono text-xs text-sky-700">FreeableMemory</div><p class="text-sm text-slate-700 mt-2">ホストで解放可能なメモリ量</p></div>
+              <div class="rounded-2xl bg-sky-50/60 p-4"><div class="font-mono text-xs text-sky-700">CacheHits / CacheMisses</div><p class="text-sm text-slate-700 mt-2">ヒット率と無駄な参照を確認</p></div>
+              <div class="rounded-2xl bg-sky-50/60 p-4"><div class="font-mono text-xs text-sky-700">Evictions</div><p class="text-sm text-slate-700 mt-2">メモリ不足によるキー退避</p></div>
+              <div class="rounded-2xl bg-sky-50/60 p-4"><div class="font-mono text-xs text-sky-700">CurrConnections</div><p class="text-sm text-slate-700 mt-2">接続数とリークの兆候</p></div>
+              <div class="rounded-2xl bg-sky-50/60 p-4"><div class="font-mono text-xs text-sky-700">EngineCPUUtilization</div><p class="text-sm text-slate-700 mt-2">エンジン主処理の負荷</p></div>
+              <div class="rounded-2xl bg-sky-50/60 p-4"><div class="font-mono text-xs text-sky-700">ReplicationLag</div><p class="text-sm text-slate-700 mt-2">レプリカの追従遅延</p></div>
+              <div class="rounded-2xl bg-sky-50/60 p-4"><div class="font-mono text-xs text-sky-700">Read / Write Latency</div><p class="text-sm text-slate-700 mt-2">キャッシュ応答時間</p></div>
+              <div class="rounded-2xl bg-sky-50/60 p-4"><div class="font-mono text-xs text-sky-700">NetworkBytesIn / Out</div><p class="text-sm text-slate-700 mt-2">小さいノードの帯域で足りるか確認</p></div>
+            </div>
+
+            <div data-quiz data-id="ec-q-metrics" data-answer="b" data-explanation="ミス比率上昇とEvictions増加が同時に起きるなら、メモリ圧迫やTTL・eviction policyを優先的に確認します。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q7. CacheMissesとEvictionsが同時に急増しました。最初に疑うべきことは？</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq7" value="a"><span>CloudTrailの記録不足</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq7" value="b"><span>メモリ圧迫、キーサイズ、TTL、eviction policy</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq7" value="c"><span>Route 53のTTLだけ</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="ecq7" value="d"><span>IAMユーザー数</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.3 高可用性を保ったオンライン垂直スケーリング</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">オンライン垂直スケーリングは、レプリケーショングループのノード数やAZ分散を減らさず、ノードタイプだけを変更します。ElastiCacheは選択した新タイプのノードを作成してデータを同期し、DNSを新ノードへ更新します。既存のエンドポイント名をアプリ側で変更する必要はありません。</p>
+            <div class="mt-5 grid sm:grid-cols-3 gap-3"><div class="rounded-2xl bg-sky-50/70 p-4"><div class="text-xs font-semibold text-sky-600">01 PRECHECK</div><div class="font-bold text-sky-900 mt-1">縮小可能性を確認</div><p class="text-xs text-slate-600 mt-1">許可ノードタイプ、ENI、メモリ、CPU、帯域</p></div><div class="rounded-2xl bg-sky-50/70 p-4"><div class="text-xs font-semibold text-sky-600">02 MODIFY</div><div class="font-bold text-sky-900 mt-1">ノードタイプを変更</div><p class="text-xs text-slate-600 mt-1">即時適用またはメンテナンスウィンドウ</p></div><div class="rounded-2xl bg-sky-50/70 p-4"><div class="text-xs font-semibold text-sky-600">03 VERIFY</div><div class="font-bold text-sky-900 mt-1">ピークまで監視</div><p class="text-xs text-slate-600 mt-1">Evictions、CPU、遅延、レプリカ、エラー</p></div></div>
+            <div class="mt-5 overflow-x-auto"><table class="w-full text-sm min-w-[720px]"><thead class="text-sky-700 bg-sky-50"><tr><th class="text-left p-3 rounded-l-xl">選択肢</th><th class="text-left p-3">高可用性</th><th class="text-left p-3">運用・費用</th><th class="text-left p-3 rounded-r-xl">評価</th></tr></thead><tbody class="text-slate-700 divide-y divide-sky-100"><tr><td class="p-3 font-semibold">2→1ノードへ削減</td><td class="p-3">単一障害点になり失う</td><td class="p-3">安いが要件違反</td><td class="p-3">不適切</td></tr><tr><td class="p-3 font-semibold">2ノードのままlargeへ変更</td><td class="p-3">レプリカとAZ分散を維持</td><td class="p-3">再構築せずノード費用を削減</td><td class="p-3">最有力</td></tr><tr><td class="p-3 font-semibold">新クラスターへ移行</td><td class="p-3">設計次第で維持可能</td><td class="p-3">一時的な二重費用と移行作業</td><td class="p-3">単純なサイズ変更には過剰</td></tr><tr><td class="p-3 font-semibold">バックアップから再作成</td><td class="p-3">切替手順に依存</td><td class="p-3">復元・検証・接続先変更が必要</td><td class="p-3">単純なサイズ変更には過剰</td></tr></tbody></table></div>
+            <div class="mt-5 rounded-2xl bg-blue-50/80 p-4 text-sm text-slate-700"><strong class="text-sky-900">「オンライン」は接続影響ゼロの保証ではありません。</strong>公式ドキュメントは最小限のダウンタイムでリクエストを処理し続ける設計としています。低負荷時間帯に実行し、ステージングで試験し、クライアントには短いタイムアウト、再試行、DNS再解決を実装します。自動フェイルオーバー有効クラスターをオンラインのまま変更できる条件として、Valkey 7.2以上またはRedis OSS 5.0.5以上を確認します。</div>
+            <p class="mt-4 text-xs text-slate-500">出典：<a class="text-sky-700 hover:underline" href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/redis-cluster-vertical-scaling.html" target="_blank" rel="noopener">オンライン垂直スケーリング</a>、<a class="text-sky-700 hover:underline" href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/CacheMetrics.Redis.html" target="_blank" rel="noopener">Valkey／Redis OSSのメトリクス</a></p>
+
+            <div data-quiz data-id="ec-q-rightsize" data-answer="b" data-explanation="ノード数を2台のまま保ち、オンライン垂直スケーリングで各ノードをlargeへ変更すれば、AZ冗長性を維持しながら過剰なメモリ費用を減らせます。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100"><div class="font-semibold text-sky-900 mb-3">Q8. 2AZのxlargeノード2台で空きメモリ75%。高可用性を保つ最も費用対効果の高い対応は？</div><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ecq-rightsize" value="a"><span>ノード数を2台から1台へ減らす</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ecq-rightsize" value="b"><span>2台を維持し、オンライン垂直スケーリングでxlargeからlargeへ変更する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ecq-rightsize" value="c"><span>largeの新クラスターを作り、手動でデータ移行する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ecq-rightsize" value="d"><span>largeの新クラスターをバックアップから復元して切り替える</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+            <div data-quiz data-multiple data-id="ec-q-rightsize-checks" data-answer="a,c,d" data-explanation="縮小前はメモリ収容、エンジンCPU、ネットワーク帯域と許可される変更先を確認し、低負荷時間帯に実施します。ノード数削減は高可用性を損ないます。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100"><div class="font-semibold text-sky-900 mb-3">Q9. ダウンサイジング前に確認すべき項目をすべて選んでください。</div><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="ecq-rightsize-checks" value="a"><span>縮小後もデータと予約領域を収容できるメモリがある</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ecq-rightsize-checks" value="b"><span>可用性のためノード数も1台へ減らす</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ecq-rightsize-checks" value="c"><span>EngineCPUUtilizationとネットワーク帯域にピーク時余裕がある</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ecq-rightsize-checks" value="d"><span>許可されたノードタイプとENI余裕を確認し、低負荷時間帯に実施する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.4 障害に強いアプリ側の設計</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">キャッシュは高速ですが、ネットワーク断、フェイルオーバー、スケーリング、メンテナンスによる接続切断は起こり得ます。クライアント側で短い接続・読み取りタイムアウト、指数バックオフ付き再試行、接続プール、DNS再解決を設計します。</p>
+            <div class="mt-5 rounded-2xl bg-blue-50/80 p-4 text-sm text-slate-700"><strong class="text-sky-900">フェイルオープン：</strong>キャッシュ障害時に元DBへフォールバックするとサービス継続性は上がりますが、全リクエストがDBへ集中する危険があります。レート制限、サーキットブレーカー、古い値の一時利用、段階復旧をセットで考えます。</div>
+            <div class="mt-4 rounded-2xl bg-sky-50/60 p-4 text-sm text-slate-700"><strong class="text-sky-900">避けたい実装：</strong>タイムアウトなし、無制限再試行、毎回新規接続、全キー同時失効、キャッシュ障害時の無制限DBフォールバック。</div>
+
+            <div data-quiz data-id="ec-q-resilience" data-answer="a,c,d" data-multiple data-explanation="短いタイムアウト、上限付き再試行、レート制限やサーキットブレーカーが重要です。無制限フォールバックはDB障害を誘発します。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q10. キャッシュ障害に備える実装をすべて選んでください。</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="checkbox" name="ecq8" value="a"><span>短いタイムアウトと上限付き再試行</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="ecq8" value="b"><span>全リクエストを無制限にDBへ送る</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="ecq8" value="c"><span>サーキットブレーカーやレート制限</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="ecq8" value="d"><span>接続プールとDNS再解決への対応</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center gap-3 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <h3 class="text-lg font-bold text-sky-900 mb-3">ケース：セール開始時に商品APIが遅くなる</h3>
+          <p class="text-[15px] text-slate-700 leading-relaxed">商品詳細は更新頻度が低く、同じ商品へ大量アクセスがあります。現在は全リクエストがRDSを読み、セール開始直後にDB CPUが上限へ達します。アクセス量の予測は難しく、キャッシュ障害時にもDBを守る必要があります。</p>
+          <div class="mt-4 rounded-2xl bg-sky-50/60 p-5 text-sm text-slate-700"><strong class="text-sky-900">設計候補：</strong>Serverless Valkey + Cache-Aside、商品ごとのTTL + ジッター、更新イベントによる削除、短いタイムアウト、DBフォールバックのレート制限、ヒット率とEvictionsの監視。</div>
+
+          <div data-quiz data-id="ec-q-case" data-answer="b" data-explanation="予測困難な負荷にはServerless、読み取り中心の商品詳細にはCache-Aside、同時失効対策にはTTLジッターが適しています。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+            <div class="font-semibold text-sky-900 mb-3">Q11. このケースに最も適した第一案は？</div>
+            <ul class="space-y-2">
+              <li><label class="tb-quiz-option"><input type="radio" name="ecq9" value="a"><span>全商品をTTLなしで永久保存し、DB更新を無視する</span></label></li>
+              <li><label class="tb-quiz-option"><input type="radio" name="ecq9" value="b"><span>Serverless ValkeyでCache-Aside、TTLジッターと制御付きフォールバック</span></label></li>
+              <li><label class="tb-quiz-option"><input type="radio" name="ecq9" value="c"><span>キャッシュを使わずRDSを再起動し続ける</span></label></li>
+              <li><label class="tb-quiz-option"><input type="radio" name="ecq9" value="d"><span>0.0.0.0/0へキャッシュを公開する</span></label></li>
+            </ul>
+            <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+          </div>
+          <details class="tb-accordion mt-5"><summary>模範的な設計メモ</summary><div class="tb-accordion-body">商品IDをキーにし、初回ミス時だけRDSから取得します。TTLは商品更新許容時間に合わせて設定し、ジッターを加えます。商品更新時は該当キーを削除します。キャッシュ障害時は短いタイムアウト後にDBへフォールバックしますが、DB保護のため同時実行数とレートを制限します。CacheHits / CacheMisses、Evictions、レイテンシー、DB CPUを同じダッシュボードで監視します。</div></details>
+        </div>
+      </section>
+
+      <section id="inventory-cluster-mode">
+        <div class="flex items-center gap-3 mb-5"><span class="tb-section-num">5</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">在庫APIで学ぶRedis OSSクラスターモード</h2><span class="tb-badge is-prac">実務</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">5.1 要件を「性能」と「可用性」に分ける</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">人気商品の販売開始直後にRDSのCPUが100%へ達し、DBインスタンスを拡張できないなら、読み取りの多い在庫参照をElastiCacheへ逃がしてRDS負荷を減らします。同時に「止められない」という要件には、各シャードのプライマリとレプリカを別AZへ配置し、Multi-AZ自動フェイルオーバーを有効にした構成で応えます。</p>
+
+            <div class="mt-5 grid md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-3 items-center" aria-label="在庫参照のキャッシュ構成">
+              <div class="rounded-2xl bg-sky-50/70 p-4 text-center"><div class="text-xs font-semibold text-sky-600">CLIENT</div><div class="font-bold text-sky-900 mt-1">在庫API</div><p class="text-xs text-slate-600 mt-1">cluster-aware client</p></div>
+              <div class="text-center text-sky-400 font-bold" aria-hidden="true">→</div>
+              <div class="rounded-2xl bg-sky-100/70 p-4 text-center"><div class="text-xs font-semibold text-sky-600">FAST PATH</div><div class="font-bold text-sky-900 mt-1">複数シャード</div><p class="text-xs text-slate-600 mt-1">キーを分散して水平拡張</p></div>
+              <div class="text-center text-sky-400 font-bold" aria-hidden="true">→ MISS →</div>
+              <div class="rounded-2xl bg-sky-50/70 p-4 text-center"><div class="text-xs font-semibold text-sky-600">SOURCE OF TRUTH</div><div class="font-bold text-sky-900 mt-1">Amazon RDS</div><p class="text-xs text-slate-600 mt-1">正しい在庫数を保持</p></div>
+            </div>
+
+            <div class="mt-5 rounded-2xl bg-amber-50/80 border border-amber-200 p-4 text-sm text-slate-700"><strong class="text-amber-900">在庫数をキャッシュだけで確定しない：</strong>在庫は誤差が販売超過へ直結します。RDSを正本にし、更新後のキャッシュ削除、短いTTL、書き込みスルー、トランザクション＋Outboxなどから整合性要件に合う方式を選びます。Redis OSSの原子的操作を使う場合も、永続的な注文確定処理と再試行時の冪等性は別に設計します。</div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">5.2 オンラインリシャーディングで止めずに水平拡張</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">クラスターモード有効のValkey／Redis OSSは、キー空間を16,384個のハッシュスロットに分け、各スロットをシャードへ割り当てます。オンラインリシャーディングでシャードを追加すると、クラスターはリクエストを処理しながらスロットとデータを新しいシャードへ再配置します。これによりメモリ容量だけでなく、読み取り・書き込み処理も複数のプライマリへ分散できます。</p>
+            <div class="mt-5 grid sm:grid-cols-3 gap-3">
+              <div class="rounded-2xl bg-sky-50/70 p-4"><div class="text-xs font-semibold text-sky-600">BEFORE</div><div class="font-bold text-sky-900 mt-1">2 shards</div><p class="text-xs text-slate-600 mt-1">キー空間を2つのプライマリで担当</p></div>
+              <div class="rounded-2xl bg-sky-50/70 p-4"><div class="text-xs font-semibold text-sky-600">RESHARD</div><div class="font-bold text-sky-900 mt-1">スロットを移動</div><p class="text-xs text-slate-600 mt-1">処理継続中にデータを再配分</p></div>
+              <div class="rounded-2xl bg-sky-50/70 p-4"><div class="text-xs font-semibold text-sky-600">AFTER</div><div class="font-bold text-sky-900 mt-1">3 shards</div><p class="text-xs text-slate-600 mt-1">容量と読み書き性能を水平拡張</p></div>
+            </div>
+            <div class="mt-5 rounded-2xl bg-blue-50/80 p-4 text-sm text-slate-700"><strong class="text-sky-900">「無停止」は「影響ゼロ」ではありません。</strong>リシャーディングは計算負荷が高く、一時的に性能が低下することがあります。クラスタープロトコル対応クライアントを使い、構成エンドポイントからスロット配置を取得し、<code>MOVED</code>応答後にトポロジーを更新できることを事前検証します。</div>
+            <div class="mt-4 rounded-2xl bg-sky-50/60 p-4 text-sm text-slate-700"><strong class="text-sky-900">ホットキーの落とし穴：</strong>1つの商品キーは1つのハッシュスロット、つまり1つのシャードへ送られます。単一の超人気商品だけに負荷が集中する場合、シャード追加だけでは分散できません。キー分割、ローカルキャッシュ、リクエスト集約、書き込み頻度の抑制も検討します。</div>
+            <p class="mt-4 text-xs text-slate-500">出典：<a class="text-sky-700 hover:underline" href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/scaling-redis-cluster-mode-enabled.html" target="_blank" rel="noopener">AWS公式：クラスターモード有効クラスターのスケーリング</a>、<a class="text-sky-700 hover:underline" href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/BestPractices.Clients.Redis.Discovery.html" target="_blank" rel="noopener">クラスタークライアントのディスカバリ</a></p>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">5.3 Multi-AZ自動フェイルオーバーとリージョン障害</h3>
+            <div class="mt-5 overflow-x-auto">
+              <table class="w-full text-sm min-w-[720px]">
+                <thead class="text-sky-700 bg-sky-50"><tr><th class="text-left p-3 rounded-l-xl">仕組み</th><th class="text-left p-3">守る障害</th><th class="text-left p-3">切り替え</th><th class="text-left p-3 rounded-r-xl">注意点</th></tr></thead>
+                <tbody class="text-slate-700 divide-y divide-sky-100">
+                  <tr><td class="p-3 font-semibold">Multi-AZ + レプリカ</td><td class="p-3">ノード／AZ障害</td><td class="p-3">同一リージョン内で自動昇格</td><td class="p-3">各シャードに別AZのレプリカが必要</td></tr>
+                  <tr><td class="p-3 font-semibold">Global Datastore</td><td class="p-3">リージョン障害</td><td class="p-3">セカンダリを明示的に昇格</td><td class="p-3">クロスリージョン自動フェイルオーバーではない</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="text-[15px] text-slate-700 leading-relaxed mt-5">Multi-AZを有効にすると、プライマリ障害時にレプリケーション遅延が最も小さいレプリカが自動的に昇格します。クラスターモード有効では自動フェイルオーバーが必須ですが、AZ障害へ耐えるには<strong>すべてのシャード</strong>に、プライマリと異なるAZのレプリカが必要です。非同期レプリケーションのため、フェイルオーバー時には少量のデータ損失が起こり得る点も織り込みます。</p>
+            <p class="mt-4 text-xs text-slate-500">出典：<a class="text-sky-700 hover:underline" href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/AutoFailover.html" target="_blank" rel="noopener">AWS公式：Multi-AZと自動フェイルオーバー</a>、<a class="text-sky-700 hover:underline" href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/Redis-Global-Datastores-Getting-Started.html" target="_blank" rel="noopener">Global Datastoreの前提条件と制約</a></p>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">5.4 提示された「2つ選択」問題の読み解き</h3>
+            <div class="grid md:grid-cols-2 gap-4 mt-5">
+              <div class="rounded-2xl bg-emerald-50/70 border border-emerald-200 p-5"><div class="font-bold text-emerald-900">想定解の2つ</div><ul class="mt-3 space-y-2 text-sm text-slate-700 list-disc pl-5"><li>オンラインリシャーディングで、処理を継続しながらシャードを追加できる</li><li>Multi-AZで、プライマリ障害時にレプリカへ自動フェイルオーバーできる</li></ul></div>
+              <div class="rounded-2xl bg-rose-50/70 border border-rose-200 p-5"><div class="font-bold text-rose-900">明確に誤り</div><ul class="mt-3 space-y-2 text-sm text-slate-700 list-disc pl-5"><li>単一ノードのコマンド実行をマルチスレッド化するから、という説明</li><li>別リージョンへ障害検知だけで自動フェイルオーバーする、という説明</li></ul></div>
+            </div>
+            <div class="mt-5 rounded-2xl bg-amber-50/80 border border-amber-200 p-4 text-sm text-slate-700"><strong class="text-amber-900">設問上の注意：</strong>「データを複数シャードへ分散し、読み取りと書き込みの負荷を並列に処理できる」という選択肢も、AWSの仕様としては正しい記述です。クラスターモードは水平分割によってストレージ容量とスループットを拡張します。そのため、選択肢がこの文面のままで「2つだけ選択」なら設問は曖昧です。想定解を選ぶ試験対策と、実際の仕様判断を混同しないようにしましょう。</div>
+
+            <div data-quiz data-multiple data-id="ec-q-cluster-mode" data-answer="a,c,d" data-explanation="技術的にはa・c・dが正しい記述です。オンラインリシャーディング、シャードによる水平分散、Multi-AZ自動フェイルオーバーはいずれもクラスターモード有効のRedis OSSで利用できます。提示された設問の想定解はa・dですが、cも仕様上正しいため問題文は曖昧です。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q12. 技術仕様として正しい説明をすべて選んでください。</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="checkbox" name="ecq-cluster-mode" value="a"><span>オンラインリシャーディングで、処理を継続しながらシャードを追加できる</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="ecq-cluster-mode" value="b"><span>単一ノードがコマンドをマルチスレッドで並列実行するため、シャードは不要である</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="ecq-cluster-mode" value="c"><span>キーを複数シャードへ分散し、読み取り・書き込み性能を水平に拡張できる</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="ecq-cluster-mode" value="d"><span>別AZのレプリカを持つMulti-AZ構成では、プライマリ障害時に自動昇格できる</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="ecq-cluster-mode" value="e"><span>Global Datastoreは、リージョン障害を検知すると必ず自動で別リージョンへ昇格する</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </article>
+
+    <section class="mt-16">
+      <h2 class="text-xl sm:text-2xl font-bold text-sky-950 mb-4"><span class="tb-section-num">▶</span>次のステップ</h2>
+      <div class="tb-card p-5 sm:p-6">
+        <ul class="space-y-3 text-[15px] text-slate-700">
+          <li><a class="text-sky-700 hover:text-sky-900 hover:underline" href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/WhatIs.html" target="_blank" rel="noopener">AWS公式：Amazon ElastiCacheとは</a> — サービス概要と対応エンジン</li>
+          <li><a class="text-sky-700 hover:text-sky-900 hover:underline" href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/WhatIs.deployment.html" target="_blank" rel="noopener">AWS公式：デプロイ方式の選択</a> — Serverlessとノードベース</li>
+          <li><a class="text-sky-700 hover:text-sky-900 hover:underline" href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SelectEngine.html" target="_blank" rel="noopener">AWS公式：エンジン比較</a> — Valkey・Redis OSS・Memcached</li>
+          <li><a class="text-sky-700 hover:text-sky-900 hover:underline" href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/CacheMetrics.WhichShouldIMonitor.html" target="_blank" rel="noopener">AWS公式：監視すべきメトリクス</a></li>
+          <li><a class="text-sky-700 hover:text-sky-900 hover:underline" href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/redis-cluster-vertical-scaling.html" target="_blank" rel="noopener">AWS公式：オンライン垂直スケーリング</a> — ノードタイプ変更と事前確認</li>
+          <li><a class="text-sky-700 hover:text-sky-900 hover:underline" href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/scaling-redis-cluster-mode-enabled.html" target="_blank" rel="noopener">AWS公式：クラスターモード有効クラスターのスケーリング</a> — オンラインリシャーディング</li>
+          <li><a class="text-sky-700 hover:text-sky-900 hover:underline" href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/AutoFailover.html" target="_blank" rel="noopener">AWS公式：Multi-AZと自動フェイルオーバー</a></li>
+          <li><span class="font-semibold text-sky-900">関連学習：</span>RDS、DynamoDB、CloudWatch、VPC、分散システム、キャッシュ無効化</li>
+        </ul>
+        <p class="mt-5 pt-4 border-t border-sky-100 text-xs text-slate-500">仕様確認日：2026-10-30。AWSサービスの仕様・料金・対応バージョンは変更される可能性があるため、実運用時は公式ドキュメントも確認してください。</p>
+      </div>
+    </section>
+
+    <div class="mt-12 flex justify-center"><a href="../../../index.html" class="rounded-full bg-white text-sky-700 hover:text-sky-900 ring-1 ring-sky-200 px-6 py-3 text-sm font-semibold shadow-sm hover:shadow transition">← 教材トップへ戻る</a></div>
+  </main>
+
+  <footer class="text-center text-xs text-slate-400 pb-10">Engineer Textbook</footer>
+  <script src="../../../assets/shared.js?v=20261030-4"></script>
+</body>
+</html>

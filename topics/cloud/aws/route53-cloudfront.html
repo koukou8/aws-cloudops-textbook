@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="ja" data-topic-id="cloud-aws-route53-cloudfront">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Amazon Route 53の位置情報ルーティング、CloudFrontへの独自ドメイン接続、Origin Shield、TTL、キャッシュキーによる配信最適化を17問で学びます。">
+  <title>Amazon Route 53 × CloudFront | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"Route 53 × CloudFront"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">通常版 · 約80分</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">Amazon Route 53 × CloudFront</h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">利用者の地域に応じたDNS応答を設計し、独自ドメインをCloudFrontへ正しく結び付け、キャッシュを活用してオリジン負荷も抑えます。</p>
+
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">今回の結論</p>
+          <p class="mt-2 text-lg font-bold text-sky-950"><code>media.novaretail.example</code> のエイリアスAレコードを作り、CloudFrontディストリビューションのドメイン名をターゲットにします。</p>
+          <p class="mt-2 text-sm text-slate-700 leading-relaxed">IPアドレスやディストリビューションIDは指定しません。IPv6を有効にしている場合は、同じ名前でエイリアスAAAAレコードも作成します。</p>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500"><li>A・AAAA・CNAME・Route 53エイリアスの違いを説明する。</li><li>位置情報・地理的近接性・レイテンシー・複数値回答ルーティングを使い分ける。</li><li>CloudFrontの代替ドメイン名とTLS証明書を含む設定順を理解する。</li><li>Origin Shield、TTL、キャッシュキーでキャッシュヒット率を改善する。</li><li>IPv6、別アカウント、DNS・キャッシュ設定の失敗を切り分ける。</li></ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">基礎</a><a href="#alias" class="underline underline-offset-4">エイリアス</a><a href="#operations" class="underline underline-offset-4">実務</a><a href="#routing" class="underline underline-offset-4">ルーティングポリシー</a><a href="#case" class="underline underline-offset-4">DNS演習</a><a href="#cache" class="underline underline-offset-4">キャッシュ最適化</a></nav>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-6"><div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div><div class="tb-progress"><div data-progress-bar style="width:0%"></div></div><p class="mt-2 text-xs text-slate-500">17問の正解状況を、このブラウザに保存します。既存14問の進捗は引き継がれます。</p></div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編：DNSとCloudFrontの役割</h2><span class="tb-badge is-basic">基礎</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 DNSは名前をCloudFrontの入口へ結び付ける</h3>
+            <div class="grid sm:grid-cols-3 gap-3 mt-4 text-sm">
+              <div class="rounded-2xl bg-sky-50 p-5"><p class="text-xs font-bold text-sky-600">01 利用者</p><p class="font-bold mt-2 break-all">media.novaretail.example</p><p class="mt-2 text-slate-600">商品画像のURLへアクセス</p></div>
+              <div class="rounded-2xl bg-sky-50 p-5"><p class="text-xs font-bold text-sky-600">02 Route 53</p><p class="font-bold mt-2">エイリアスで応答</p><p class="mt-2 text-slate-600">CloudFrontの入口へ名前解決</p></div>
+              <div class="rounded-2xl bg-sky-50 p-5"><p class="text-xs font-bold text-sky-600">03 CloudFront</p><p class="font-bold mt-2">エッジから配信</p><p class="mt-2 text-slate-600">キャッシュまたはオリジンから応答</p></div>
+            </div>
+            <div class="ct-copy mt-4"><p>Route 53は権威DNSとして、問い合わせられた名前をどこへ向けるか応答します。CloudFrontはコンテンツ配信ネットワーク（CDN）として、利用者に近いエッジロケーションからコンテンツを配信します。</p><p>DNSレコードを作るだけでは、CloudFront側がその独自ドメインを受け付ける設定にはなりません。後述する代替ドメイン名とTLS証明書も必要です。</p></div>
+            <div data-quiz data-id="r53cf-q1" data-answer="b" data-explanation="Route 53は名前解決、CloudFrontはエッジ配信を担当します。両者の設定を組み合わせます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q1. Route 53とCloudFrontの役割の組み合わせは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q1" value="a"><span>Route 53が画像を保存し、CloudFrontがドメインを登録する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q1" value="b"><span>Route 53が名前解決し、CloudFrontがコンテンツを配信する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q1" value="c"><span>Route 53がTLS終端だけを行う</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q1" value="d"><span>CloudFrontがEC2のプライベートIPをDNSへ固定登録する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 A・AAAA・CNAME・エイリアス</h3>
+            <div class="overflow-x-auto rounded-2xl ring-1 ring-sky-100"><table class="w-full text-sm"><thead class="bg-sky-50 text-sky-800"><tr><th class="text-left p-3">種類</th><th class="text-left p-3">通常の意味</th><th class="text-left p-3">CloudFrontでの使い方</th></tr></thead><tbody class="text-slate-700 divide-y divide-sky-50"><tr><td class="p-3 font-semibold">A</td><td class="p-3">IPv4アドレス</td><td class="p-3">Route 53エイリアスAとしてCloudFrontを指定</td></tr><tr><td class="p-3 font-semibold">AAAA</td><td class="p-3">IPv6アドレス</td><td class="p-3">IPv6有効時にエイリアスAAAAも作成</td></tr><tr><td class="p-3 font-semibold">CNAME</td><td class="p-3">別のDNS名</td><td class="p-3">サブドメインなら技術的に可能。ゾーンApexには不可</td></tr><tr><td class="p-3 font-semibold">Alias</td><td class="p-3">Route 53独自の拡張</td><td class="p-3">対応AWSリソースへA／AAAA等としてルーティング</td></tr></tbody></table></div>
+            <div class="ct-note mt-4"><strong>エイリアスはレコードタイプではなくRoute 53の機能です。</strong>今回作るのは「Aレコード＋Alias=Yes」です。値欄へIPアドレスを入力する通常のAレコードとは異なります。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/ResourceRecordTypes.html" target="_blank" rel="noopener">Route 53のレコードタイプ</a></p>
+            <div data-quiz data-id="r53cf-q2" data-answer="a,c" data-multiple data-explanation="エイリアスはRoute 53の拡張機能で、CloudFrontにはA、IPv6有効時はAAAAも作ります。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q2. 正しい説明を2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="r53cf-q2" value="a"><span>エイリアスAはCloudFrontをターゲットにできる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="r53cf-q2" value="b"><span>CNAMEはゾーンApexでも常に作成できる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="r53cf-q2" value="c"><span>IPv6を有効にしたCloudFrontにはエイリアスAAAAも作る</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="r53cf-q2" value="d"><span>Aliasという独立した標準DNSレコードタイプがある</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.3 CloudFrontはドメイン名をターゲットにする</h3>
+            <div class="ct-copy"><p>CloudFrontディストリビューションには、<code>d111111abcdef8.cloudfront.net</code> のようなドメイン名が割り当てられます。Route 53のエイリアスターゲットには、このドメイン名に対応するディストリビューションを選びます。</p><p>ディストリビューションIDは管理APIでリソースを識別する値であり、DNSの接続先ではありません。また、名前解決で一時的に観測したIPアドレスをAレコードへ固定してはいけません。標準構成ではサービスのドメイン名を利用します。</p></div>
+            <details class="tb-accordion mt-4"><summary>CloudFrontに固定IPの機能はまったくない？</summary><div class="tb-accordion-body">CloudFrontにはAnycast Static IPsなど別要件向けの機能もありますが、通常の独自ドメイン接続で、観測したエッジIPやプライベートIPをRoute 53へ直接登録する理由にはなりません。今回の選択肢ではCloudFrontドメイン名へのエイリアスが正解です。</div></details>
+            <div data-fill data-id="r53cf-q3" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="text-sm leading-relaxed">エイリアスターゲットに使う値の形式は <span class="tb-fill"><input data-answer="cloudfrontドメイン名|ディストリビューションドメイン名|d111111abcdef8.cloudfront.net" aria-label="CloudFrontエイリアスターゲット" placeholder="???"></span> です。</p><button data-fill-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="alias" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：独自ドメインを成立させる設定</h2><span class="tb-badge is-applied">応用</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 Route 53で作るレコード</h3>
+            <div class="rounded-2xl bg-sky-50 p-5 text-sm text-slate-700 space-y-2"><p><strong class="text-sky-900">Hosted zone：</strong><code>novaretail.example</code> のパブリックホストゾーン</p><p><strong class="text-sky-900">Record name：</strong><code>media</code>（完全名は <code>media.novaretail.example</code>）</p><p><strong class="text-sky-900">Record type：</strong>A — IPv4 address</p><p><strong class="text-sky-900">Alias：</strong>有効</p><p><strong class="text-sky-900">Route traffic to：</strong>Alias to CloudFront distribution</p><p><strong class="text-sky-900">Target：</strong><code>d111111abcdef8.cloudfront.net</code> のようなディストリビューションドメイン</p><p><strong class="text-sky-900">Evaluate target health：</strong>No</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-to-cloudfront-distribution.html" target="_blank" rel="noopener">Route 53からCloudFrontへルーティングする</a></p>
+            <div data-quiz data-id="r53cf-q4" data-answer="c" data-explanation="レコード名は利用者が使う独自ドメイン、ターゲットはCloudFrontのディストリビューションドメインです。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q4. 今回作成するレコードは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q4" value="a"><span>media.cloudfront.net → ディストリビューションID</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q4" value="b"><span>media.novaretail.example → CloudFrontのプライベートIP</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q4" value="c"><span>media.novaretail.exampleのエイリアスA → CloudFrontドメイン名</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q4" value="d"><span>novaretail.exampleのMX → CloudFrontドメイン名</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 CloudFront側にも代替ドメイン名と証明書が必要</h3>
+            <div class="ct-copy"><p>CloudFrontディストリビューションの代替ドメイン名（Alternate domain name）へ <code>media.novaretail.example</code> を追加します。HTTPSで配信するには、その名前をSubject Alternative Name（SAN）に含む有効なTLS証明書をディストリビューションへ関連付けます。</p><p>AWS Certificate Manager（ACM）の証明書をCloudFrontで使う場合は、米国東部（バージニア北部）リージョン <code>us-east-1</code> で用意します。DNSだけを先に切り替えると、ディストリビューションの反映前や証明書設定の不足により正常に応答できません。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/CreatingCNAME.html" target="_blank" rel="noopener">CloudFrontへ代替ドメイン名を追加する</a></p>
+            <div data-quiz data-id="r53cf-q5" data-answer="a,c,d" data-multiple data-explanation="CloudFront側の代替ドメイン名、名前を覆う証明書、Route 53のエイリアスを揃えます。CloudFront用ACM証明書はus-east-1です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q5. HTTPSで独自ドメインを使うために必要なものを3つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="r53cf-q5" value="a"><span>CloudFrontの代替ドメイン名</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="r53cf-q5" value="b"><span>CloudFrontのプライベートIP</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="r53cf-q5" value="c"><span>media.novaretail.exampleを覆うTLS証明書</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="r53cf-q5" value="d"><span>Route 53のエイリアスレコード</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.3 ApexとIPv6でエイリアスの価値が分かる</h3>
+            <div class="ct-copy"><p><code>media.novaretail.example</code> はサブドメインなので、標準CNAMEでCloudFrontドメイン名へ向けることも技術的には可能です。しかしRoute 53を使うなら、CloudFrontへ最適化されたエイリアスを選べます。エイリアスはゾーンApexでも使用でき、CloudFrontをターゲットにするエイリアスクエリにはRoute 53のクエリ料金がかかりません。</p><p>CloudFrontでIPv6を有効にしている場合、AエイリアスだけではなくAAAAエイリアスも同じ名前で作成します。AはIPv4、AAAAはIPv6の問い合わせに対応します。</p></div>
+            <div class="ct-note"><strong>「エイリアスは必ず高速」とは断定しません。</strong>標準CNAMEでは別名をたどるDNS処理がありますが、利用者が感じる速度はキャッシュ、リゾルバー、ネットワークなどにも左右されます。選択理由はAWS統合、Apex対応、料金、運用性で説明するのが正確です。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/CNAMEs.html" target="_blank" rel="noopener">CloudFrontの代替ドメイン名とRoute 53エイリアス</a></p>
+            <div data-quiz data-id="r53cf-q6" data-answer="d" data-explanation="IPv6を有効にしたCloudFrontには、同じ独自ドメイン名でAとAAAAの両方をエイリアスとして作ります。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q6. CloudFrontでIPv6を有効化した場合のRoute 53設定は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q6" value="a"><span>Aレコードを削除してAAAAだけ作る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q6" value="b"><span>IPv6の固定IPを自分で入力する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q6" value="c"><span>CNAMEとMXを組み合わせる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q6" value="d"><span>同じ名前でエイリアスAとエイリアスAAAAを作る</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="operations" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：安全な設定順と調査</h2><span class="tb-badge is-prac">実務</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 設定の順序</h3>
+            <ol class="space-y-3 text-sm text-slate-700"><li class="rounded-2xl bg-sky-50 p-4"><strong>1. 証明書を準備：</strong><code>media.novaretail.example</code> を含む証明書を検証します。</li><li class="rounded-2xl bg-sky-50 p-4"><strong>2. CloudFrontへ追加：</strong>代替ドメイン名と証明書を関連付けます。</li><li class="rounded-2xl bg-sky-50 p-4"><strong>3. Deployedを確認：</strong>ディストリビューションの変更反映を待ちます。</li><li class="rounded-2xl bg-sky-50 p-4"><strong>4. Route 53を設定：</strong>A、必要ならAAAAのエイリアスを作成します。</li><li class="rounded-2xl bg-sky-50 p-4"><strong>5. DNSとHTTPSを確認：</strong><code>dig</code>、ブラウザ、<code>curl</code>等で名前・証明書・応答を確認します。</li></ol>
+            <div class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q7. 適切な順に並べ替えてください。</p><ul data-sortable data-id="r53cf-q7" data-answer="cert,domain,deployed,dns,verify" class="tb-sortable"><li data-id="dns">Route 53でエイリアスA／AAAAを作る</li><li data-id="cert">独自ドメインを覆う証明書を準備する</li><li data-id="verify">DNSとHTTPSの応答を確認する</li><li data-id="domain">CloudFrontへ代替ドメイン名と証明書を設定する</li><li data-id="deployed">CloudFrontの変更がDeployedになるのを確認する</li></ul><p data-sortable-feedback class="text-sm text-slate-500 mt-3">ドラッグまたは矢印ボタンで変更すると判定します。</p></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 表示されないときの切り分け</h3>
+            <div class="overflow-x-auto rounded-2xl ring-1 ring-sky-100"><table class="w-full text-sm"><thead class="bg-sky-50 text-sky-800"><tr><th class="text-left p-3">症状</th><th class="text-left p-3">確認すること</th></tr></thead><tbody class="text-slate-700 divide-y divide-sky-50"><tr><td class="p-3">候補にディストリビューションが出ない</td><td class="p-3">代替ドメイン名の一致、反映完了、別アカウントか</td></tr><tr><td class="p-3">別アカウントにある</td><td class="p-3">一覧選択ではなくCloudFrontドメイン名を手入力</td></tr><tr><td class="p-3">証明書エラー</td><td class="p-3">SAN、期限、信頼されたCA、CloudFront用ACMのリージョン</td></tr><tr><td class="p-3">IPv6だけ失敗</td><td class="p-3">CloudFrontのIPv6設定とAAAAエイリアス</td></tr><tr><td class="p-3">DNSは正しいが403</td><td class="p-3">CloudFrontビヘイビア、オリジン権限、署名・WAF等</td></tr></tbody></table></div>
+            <div class="ct-note mt-4"><strong>パブリックホストゾーンを使います。</strong>CloudFrontをターゲットにするエイリアスはプライベートホストゾーンには作成できません。</div>
+            <div data-quiz data-id="r53cf-q8" data-answer="b" data-explanation="別アカウントのCloudFrontは候補一覧に出ないことがあります。ディストリビューションのドメイン名を入力します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q8. CloudFrontが別AWSアカウントにあり、Route 53の候補一覧に表示されません。どうする？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q8" value="a"><span>解決IPを取得して固定Aレコードにする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q8" value="b"><span>CloudFrontのディストリビューションドメイン名を入力する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q8" value="c"><span>ディストリビューションIDをCNAME値にする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q8" value="d"><span>プライベートホストゾーンだけを作る</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.3 エイリアスとCNAMEを公平に比較する</h3>
+            <div class="ct-copy"><p>今回の選択肢ではエイリアスAが最適です。ただし「CNAMEなら絶対に動かない」という理由ではありません。<code>media</code> のようなサブドメインでは、CNAMEをCloudFrontドメイン名へ向ける構成もDNS上は可能です。</p><p>Route 53エイリアスの強みは、ゾーンApexでも利用できること、CloudFront等のAWSリソースと統合されること、CloudFrontをターゲットにしたRoute 53クエリが無料であることです。独自ドメインそのものをCloudFrontの代替ドメイン名へ追加する点は、どちらのDNS方式でも変わりません。</p></div>
+            <div data-quiz data-id="r53cf-q9" data-answer="c" data-explanation="サブドメインではCNAMEも技術的に可能です。Route 53ではAWS統合、Apex対応、クエリ料金などからエイリアスが推奨されます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q9. CNAMEとの比較として最も正確なのは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q9" value="a"><span>CloudFrontはCNAMEを一切受け付けない</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q9" value="b"><span>CNAMEはCloudFrontの固定IPを値にする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q9" value="c"><span>サブドメインではCNAMEも可能だが、Route 53ではエイリアスを優先する利点がある</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q9" value="d"><span>エイリアスはどのDNS事業者でも同じ名称で提供される標準規格</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="routing" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：Route 53ルーティングポリシー</h2><span class="tb-badge is-applied">応用</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.1 明確な地域境界には位置情報ルーティング</h3>
+            <div class="rounded-2xl bg-sky-50 p-5"><p class="text-xs font-bold tracking-wider text-sky-700">今回の正解</p><p class="mt-2 text-lg font-bold text-sky-950">位置情報ルーティングポリシー（Geolocation Routing Policy）</p><p class="mt-2 text-sm text-slate-700">South America（大陸コード <code>SA</code>）のレコードを <code>sa-east-1</code> のWebサイトへ、Defaultレコードを <code>ap-northeast-1</code> のWebサイトへ向けます。</p></div>
+            <div class="ct-flow" aria-label="位置情報ルーティングのDNS応答"><div><small>SOUTH AMERICA</small><strong>南米からのDNS問い合わせ</strong><p>大陸SAのレコードに一致</p></div><div><small>ROUTE 53</small><strong>Geolocation</strong><p>問い合わせ元の地域で応答を選択</p></div><div><small>ENDPOINT</small><strong>sa-east-1</strong><p>それ以外はDefaultでap-northeast-1</p></div></div>
+            <div class="ct-copy mt-4"><p>位置情報ルーティングは、DNS問い合わせ元として推定した地域に基づいて応答を切り替えます。指定単位は大陸、国、米国の州です。範囲が重なる場合は、国の設定が大陸の設定より優先されるなど、より具体的な地域が選ばれます。</p><p>Route 53が地域を特定できないIPや、どの地域レコードにも一致しない問い合わせがあります。そのため「それ以外」を東京へ送る今回の構成ではDefaultレコードが必須です。Defaultを作らなければ、該当する問い合わせへRoute 53が回答を返さない可能性があります。</p></div>
+            <div data-quiz data-id="r53cf-q15" data-answer="a" data-explanation="『南米はsa-east-1、それ以外はap-northeast-1』という明確な地域境界には位置情報ルーティングを使い、南米レコードとDefaultレコードを作成します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q15. 南米の訪問者だけをsa-east-1へ、それ以外をap-northeast-1へ誘導するポリシーは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q15" value="a"><span>位置情報ルーティング</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q15" value="b"><span>地理的近接性ルーティング</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q15" value="c"><span>レイテンシールーティング</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q15" value="d"><span>複数値回答ルーティング</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.2 4つのポリシーを「何を基準に選ぶか」で区別する</h3>
+            <div class="overflow-x-auto rounded-2xl ring-1 ring-sky-100"><table class="w-full text-sm"><thead class="bg-sky-50 text-sky-800"><tr><th class="text-left p-3">ポリシー</th><th class="text-left p-3">選択基準</th><th class="text-left p-3">代表用途</th><th class="text-left p-3">今回の評価</th></tr></thead><tbody class="text-slate-700 divide-y divide-sky-50"><tr><th scope="row" class="text-left p-3">位置情報</th><td class="p-3">利用者側の地域</td><td class="p-3">国・大陸ごとのコンテンツや規制</td><td class="p-3">明確な南米境界を表現できる</td></tr><tr><th scope="row" class="text-left p-3">地理的近接性</th><td class="p-3">利用者とリソースの地理的な近さ</td><td class="p-3">Biasで地域境界を拡大・縮小</td><td class="p-3">近さで決まり、南米境界の指定ではない</td></tr><tr><th scope="row" class="text-left p-3">レイテンシー</th><td class="p-3">AWSが保持するリージョン間遅延データ</td><td class="p-3">最小レイテンシーのリージョンへ誘導</td><td class="p-3">地理的な所属を保証しない</td></tr><tr><th scope="row" class="text-left p-3">複数値回答</th><td class="p-3">正常な複数レコード</td><td class="p-3">最大8件の正常な値を回答</td><td class="p-3">地域別の固定振り分けではない</td></tr></tbody></table></div>
+            <div class="ct-note mt-4"><strong>地理的近接性は「大陸を指定する機能」ではありません。</strong>リソースのAWSリージョンまたは緯度・経度と利用者の位置を基に境界を作り、Biasで相対的に調整します。明確な国・大陸単位のルールには位置情報を選びます。</div>
+            <div data-quiz data-multiple data-id="r53cf-q16" data-answer="b,d" data-explanation="レイテンシーは低遅延のAWSリージョンを選び、地理的近接性はリソースとの近さとBiasで境界を調整します。位置情報のような国・大陸の明示指定とは異なります。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q16. 正しい説明を2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="r53cf-q16" value="a"><span>複数値回答は利用者の大陸を判定し、1つの値だけを返す</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="r53cf-q16" value="b"><span>レイテンシーは地理的な所属ではなく、より低遅延なAWSリージョンを選ぶ</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="r53cf-q16" value="c"><span>位置情報ルーティングでは任意の都道府県を指定できる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="r53cf-q16" value="d"><span>地理的近接性ではBiasを使ってリソースが担当する地域の大きさを調整できる</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.3 DNSの位置判定には限界がある</h3>
+            <div class="ct-copy"><p>Route 53はDNS問い合わせの送信元IPを地域へマッピングします。EDNS Client Subnet（ECS）に対応する再帰リゾルバーなら利用者ネットワークの一部を判断材料にできますが、対応しない場合は再帰リゾルバーのIPが基準になります。</p><p>VPN、企業プロキシ、通信事業者のDNS構成などにより、実際の利用者の物理的な現在地と異なる判定になる場合があります。位置情報ルーティングはコンテンツ配信や地域別入口の制御に有効ですが、本人の居住地を証明する認証手段としては使いません。</p></div>
+            <details class="tb-accordion mt-4"><summary>可用性も必要な場合は？</summary><div class="tb-accordion-body">地域別レコードへヘルスチェックを関連付ける設計を検討します。ただしDNSはTTLの間キャッシュされるため、即時切り替えを保証するロードバランサーではありません。地理的な振り分け、エンドポイントの冗長化、ヘルスチェック、TTLを一組で設計します。</div></details>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy-geo.html" target="_blank" rel="noopener">AWS公式：Geolocation routing</a>、<a href="https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy.html" target="_blank" rel="noopener">AWS公式：Choosing a routing policy</a>、<a href="https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/best-practices-dns.html" target="_blank" rel="noopener">AWS公式：Route 53 DNS best practices</a></p>
+            <div data-quiz data-id="r53cf-q17" data-answer="c" data-explanation="Defaultレコードは、個別に設定していない地域とRoute 53が地域を特定できないIPからの問い合わせを処理します。今回の『それ以外』を東京へ送るために必要です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q17. 南米以外をap-northeast-1へ確実に応答させるために追加するものは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q17" value="a"><span>南米向けレコードのBiasを+99にする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q17" value="b"><span>複数値回答レコードを8件作る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q17" value="c"><span>ap-northeast-1を返す位置情報のDefaultレコード</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q17" value="d"><span>sa-east-1のレイテンシーレコードだけを作る</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">5</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：novaretail.example</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <p class="ct-copy">Route 53でパブリックDNSを管理し、新しいCloudFrontディストリビューションへ <code>media.novaretail.example</code> をルーティングします。どのレコードを作成しますか？</p>
+          <div data-quiz data-id="r53cf-q10" data-answer="c" data-explanation="レコード名は利用者が使う独自ドメイン、レコードはエイリアスA、ターゲットはCloudFrontディストリビューションのドメイン名です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q10. 最も適切な設定は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q10" value="a"><span>CNAME：media.novaretail.example → CloudFrontのプライベートIP</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q10" value="b"><span>CNAME：media.cloudfront.net → CloudFrontのパブリックIP</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q10" value="c"><span>エイリアスA：media.novaretail.example → CloudFrontドメイン名</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q10" value="d"><span>通常A：media.cloudfront.net → ディストリビューションID</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          <div class="ct-note mt-5"><strong>試験での判断手順：</strong>①利用者が入力する名前をレコード名にする ②CloudFrontはIPやIDではなくドメイン名へ向ける ③Route 53ならエイリアスAを選ぶ ④IPv6有効時はAAAAも追加する。</div>
+        </div>
+      </section>
+
+      <section id="cache" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">6</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">性能編：Origin Shieldでオリジン負荷を下げる</h2><span class="tb-badge is-prac">実務</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">5.1 結論：追加の集約キャッシュを有効にする</h3>
+            <div class="rounded-2xl bg-emerald-50 ring-1 ring-emerald-100 p-5"><p class="text-xs font-bold tracking-wider text-emerald-700">今回の正解</p><p class="mt-2 text-lg font-bold text-emerald-950">既存ディストリビューションのオリジン設定でOrigin Shieldを有効にします。</p><p class="mt-2 text-sm text-emerald-900/80">EC2 Webサーバーとのレイテンシーが最も低いOrigin Shieldリージョンを選びます。通常はオリジンと同じ、または最も近いAWSリージョンが候補です。</p></div>
+            <div class="grid sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-5 text-sm text-center">
+              <div class="rounded-2xl bg-sky-50 p-4"><p class="text-xs font-bold text-sky-600">01</p><p class="font-bold mt-1">利用者</p></div>
+              <div class="rounded-2xl bg-sky-50 p-4"><p class="text-xs font-bold text-sky-600">02</p><p class="font-bold mt-1">エッジ</p></div>
+              <div class="rounded-2xl bg-sky-50 p-4"><p class="text-xs font-bold text-sky-600">03</p><p class="font-bold mt-1">リージョナル<br>エッジキャッシュ</p></div>
+              <div class="rounded-2xl bg-emerald-50 ring-1 ring-emerald-200 p-4"><p class="text-xs font-bold text-emerald-700">04 集約</p><p class="font-bold mt-1 text-emerald-950">Origin Shield</p></div>
+              <div class="rounded-2xl bg-amber-50 p-4"><p class="text-xs font-bold text-amber-700">05 HTTP(S)</p><p class="font-bold mt-1">EC2 Web</p></div>
+              <div class="rounded-2xl bg-slate-100 p-4"><p class="text-xs font-bold text-slate-600">06 NFS</p><p class="font-bold mt-1">Amazon EFS</p></div>
+            </div>
+            <div class="ct-copy mt-4"><p>通常のCloudFrontでもエッジロケーションとリージョナルエッジキャッシュがオリジンへの到達を減らします。Origin Shieldを有効にすると、その先に共有される追加キャッシュ層が入り、異なる地域から来たキャッシュミスを一か所に集約できます。</p><p>同じオブジェクトへの同時リクエストはまとめられ、Origin Shieldからオリジンへ送る取得リクエストを最少1回まで減らせます。これにより、EC2 WebサーバーとEFSへ到達する負荷を抑えながら、CloudFront全体のキャッシュヒット率を高めやすくなります。Origin Shieldには追加料金があるため、削減できるオリジン負荷・転送量と合わせて評価します。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/origin-shield.html" target="_blank" rel="noopener">AWS公式：Amazon CloudFront Origin Shield</a></p>
+            <div data-quiz data-id="r53cf-q11" data-answer="b" data-explanation="Origin Shieldはリージョナルエッジキャッシュとオリジンの間に共有キャッシュ層を追加し、同一オブジェクトへの取得を集約します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q11. EFSをマウントしたEC2オリジンへのリクエストを減らし、キャッシュヒット率も高める最適な設定は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q11" value="a"><span>フィールドレベル暗号化を有効にする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q11" value="b"><span>Origin Shieldを有効にする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q11" value="c"><span>Minimum TTLを0秒にする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q11" value="d"><span>EFSをCloudFrontの直接オリジンにする</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">5.2 request collapsingは「同じキャッシュキー」で効く</h3>
+            <div class="ct-copy"><p>CloudFrontは、同じキャッシュキーを持つ同一オブジェクトへの同時リクエストをまとめ、先頭の1件だけを次のキャッシュ層またはオリジンへ進めます。これをrequest collapsingと呼びます。Origin Shieldでは複数のリージョナルエッジキャッシュから来るリクエストも集約できます。</p><p>ただし、不要なCookie、ヘッダー、クエリ文字列をキャッシュキーへ含めると、内容が同じでも別オブジェクトとして扱われます。静的な画像やPDFでは、オリジンの応答内容を変える値だけをキャッシュキーに残すことが基本です。</p></div>
+            <div class="overflow-x-auto rounded-2xl ring-1 ring-sky-100 mt-4"><table class="w-full text-sm"><thead class="bg-sky-50 text-sky-800"><tr><th class="text-left p-3">設定</th><th class="text-left p-3">キャッシュへの影響</th></tr></thead><tbody class="text-slate-700 divide-y divide-sky-50"><tr><td class="p-3">不要なCookieを含める</td><td class="p-3">利用者ごとにキーが分裂し、ヒットしにくい</td></tr><tr><td class="p-3">追跡用クエリをすべて含める</td><td class="p-3">同じ画像でも別キャッシュになりやすい</td></tr><tr><td class="p-3">必要な値だけを許可リスト化</td><td class="p-3">同一コンテンツを同じキーへ集約しやすい</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cache-hit-ratio.html" target="_blank" rel="noopener">AWS公式：キャッシュヒット率を高める</a>／<a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/RequestAndResponseBehaviorCustomOrigin.html" target="_blank" rel="noopener">request collapsing</a></p>
+            <div data-quiz data-id="r53cf-q12" data-answer="a,c" data-multiple data-explanation="Origin Shieldによる集約と、キャッシュキーの種類を必要最小限にする設計を組み合わせると効果的です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q12. キャッシュヒット率を改善する行動を2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="r53cf-q12" value="a"><span>オリジンに近いリージョンでOrigin Shieldを有効にする</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="r53cf-q12" value="b"><span>すべてのCookieとヘッダーをキャッシュキーへ追加する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="r53cf-q12" value="c"><span>応答内容を変えるクエリ文字列だけをキャッシュキーに含める</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="r53cf-q12" value="d"><span>オブジェクトごとにランダムなクエリ文字列を付与する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">5.3 TTLは「0かどうか」だけで決まらない</h3>
+            <div class="ct-copy"><p>Minimum TTLを0秒にしても、それだけでキャッシュが無効になるわけではありません。オリジンが返す<code>Cache-Control: max-age</code>／<code>s-maxage</code>、キャッシュポリシーのDefault TTLとMaximum TTLを組み合わせて実際の保持時間が決まります。Minimum・Default・Maximum TTLがすべて0ならキャッシュは無効です。</p><p>更新頻度の低い画像やPDFは、長めの<code>s-maxage</code>とバージョン付きファイル名を使うと、長期キャッシュと安全な更新を両立できます。反対にMinimum TTLを正の値にすると、オリジンが<code>no-cache</code>、<code>no-store</code>、<code>private</code>を返しても、その最小時間はCloudFrontがキャッシュするため注意が必要です。</p></div>
+            <div class="ct-note mt-4"><strong>試験問題の読み方：</strong>「Minimum TTLを0にする」はキャッシュヒット率を高める施策ではありません。ただし「0にすると必ず即時失効する」とも限らず、オリジンヘッダーとほかのTTL設定を併せて判断します。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cache-key-understand-cache-policy.html" target="_blank" rel="noopener">AWS公式：キャッシュポリシーとTTL</a></p>
+            <div data-quiz data-id="r53cf-q13" data-answer="c" data-explanation="Minimum TTLが0でも、オリジンのCache-ControlやDefault TTLによってキャッシュされます。3種類のTTLがすべて0ならキャッシュ無効です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q13. Minimum TTLを0秒にした場合の説明として最も正確なのは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q13" value="a"><span>すべてのオブジェクトが必ず0秒で削除される</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q13" value="b"><span>Origin Shieldが自動的に有効になる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q13" value="c"><span>実際の保持時間はオリジンヘッダーやDefault／Maximum TTLにも左右される</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q13" value="d"><span>フィールドレベル暗号化が解除される</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">5.4 EFSと暗号化機能を混同しない</h3>
+            <div class="ct-copy"><p>Amazon EFSはNFSでマウントするファイルシステムであり、CloudFrontが取得に使うHTTP／HTTPSのオリジンではありません。EFS上のファイルをHTTPで返すEC2 Webサーバーをカスタムオリジンにする現在の構成は成立しています。EFSへ直接変更するのではなく、その前段のCloudFrontキャッシュを最適化します。</p><p>フィールドレベル暗号化は、クレジットカード番号など特定フィールドをエッジで公開鍵暗号化し、許可されたオリジンだけが復号できるようにする機能です。機密データ保護のための機能であり、キャッシュヒット率やオリジンリクエスト数を改善する設定ではありません。</p></div>
+            <div class="grid sm:grid-cols-2 gap-4 mt-4"><div class="rounded-2xl bg-emerald-50 p-5"><p class="font-bold text-emerald-900">性能・負荷の課題</p><p class="mt-2 text-sm text-emerald-900/80">Origin Shield、TTL、Cache-Control、キャッシュキーを検討</p></div><div class="rounded-2xl bg-violet-50 p-5"><p class="font-bold text-violet-900">機密フィールドの保護</p><p class="mt-2 text-sm text-violet-900/80">フィールドレベル暗号化を検討。キャッシュ改善とは別軸</p></div></div>
+            <div data-quiz data-id="r53cf-q14" data-answer="b" data-explanation="EFSはNFSのファイルシステムです。CloudFrontにはHTTP(S)で応答するEC2 Webサーバーをオリジンとして残し、Origin Shield等を調整します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q14. EFS上の静的アセットをCloudFrontで配信する構成として適切なのは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q14" value="a"><span>EFSをNFSのままCloudFrontへ直接登録する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q14" value="b"><span>EFSをマウントしたEC2 WebサーバーをHTTP(S)オリジンにする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q14" value="c"><span>Route 53のエイリアスをEFSのマウントターゲットへ向ける</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q14" value="d"><span>フィールドレベル暗号化でNFSをHTTPへ変換する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+      <section id="device-and-invalidation" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">+</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">追加演習：端末別配信と緊急キャッシュ更新</h2></div>
+        <div class="grid md:grid-cols-2 gap-5">
+          <div class="tb-card p-5 sm:p-6"><h3 class="font-bold text-sky-900">モバイル／デスクトップで内容を分ける</h3><p class="ct-copy mt-3">CloudFrontは既定でオリジンへ渡す<code>User-Agent</code>を<code>Amazon CloudFront</code>へ置換します。生のUser-Agentは値の種類が多くキャッシュ効率を落とすため、<code>CloudFront-Is-Mobile-Viewer</code>、<code>CloudFront-Is-Tablet-Viewer</code>等をキャッシュ／オリジンリクエストポリシーで必要な分だけ転送し、端末区分ごとにキャッシュを分ける方法が推奨です。</p></div>
+          <div class="tb-card p-5 sm:p-6"><h3 class="font-bold text-sky-900">TTL満了前に改訂ページを反映する</h3><p class="ct-copy mt-3">緊急時は対象パスのCloudFront invalidationを作成し、次の要求でS3から最新版を取得させます。DNS TTLの変更ではコンテンツキャッシュは消えません。恒常的にはファイル名へバージョン／ハッシュを含め、長いTTLと安全な更新を両立します。</p></div>
+        </div>
+        <div class="ct-note mt-5"><strong>ApexからALBへ：</strong>Route 53では「ALIAS」という独立レコードタイプではなく、A（IPv4）／AAAA（IPv6）レコードでAliasを有効にしてALBをターゲットにします。</div>
+        <div data-quiz data-id="r53cf-q20" data-answer="b" data-explanation="モバイル判定ではCloudFrontが生成するデバイス種別ヘッダーを必要な分だけ転送する方が、User-Agent全値よりキャッシュ効率を保ちやすい設計です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q20. 端末別レスポンスをキャッシュし分ける推奨設計は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q20" value="a"><span>すべてのUser-Agent値を無条件にキャッシュキーへ追加</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q20" value="b"><span>CloudFrontのデバイス種別ヘッダーを必要な分だけ使う</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="r53cf-q20" value="c"><span>DNS TTLだけを短くする</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+      </section>
+    </article>
+
+    <section class="mt-12"><h2 class="text-xl font-bold text-sky-950 mb-4">次のステップ</h2><div class="tb-card p-5 sm:p-6"><ul class="space-y-3 text-sm text-slate-700"><li><a class="text-sky-700 underline" href="s3.html">Amazon S3</a>：CloudFrontのオリジンにするオブジェクトストレージを学ぶ。</li><li><a class="text-sky-700 underline" href="cloudtrail.html">AWS CloudTrail</a>：DNSやディストリビューションの変更操作を追跡する。</li><li><a class="text-sky-700 underline" href="alb-nlb.html">ALB / NLB</a>：CloudFrontのオリジン候補となる入口を比較する。</li><li><a class="text-sky-700 underline" href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/origin-shield.html" target="_blank" rel="noopener">AWS公式：CloudFront Origin Shield</a></li><li><a class="text-sky-700 underline" href="https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-to-cloudfront-distribution.html" target="_blank" rel="noopener">AWS公式：Route 53からCloudFrontへのルーティング</a></li></ul></div></section>
+    <div class="mt-10 text-center"><a href="../../../index.html" class="inline-block rounded-full bg-white text-sky-700 ring-1 ring-sky-200 px-6 py-3 text-sm font-semibold">← 教材一覧へ</a></div>
+  </main>
+
+  <footer class="text-center text-xs text-slate-400 pb-10">Engineer Textbook · Route 53 × CloudFront · 公式資料確認：2026-10-30</footer>
+  <script src="../../../assets/shared.js?v=20261030-2"></script>
+</body>
+</html>

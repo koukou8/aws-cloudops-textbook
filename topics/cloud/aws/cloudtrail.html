@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ja" data-topic-id="cloud-aws-cloudtrail">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AWS CloudTrailの操作履歴、管理イベントとデータイベント、証跡、ログファイルの整合性検証を学ぶ教材。SHA-256と電子署名による改ざん検知をブラウザのデモで体験できます。">
+  <title>AWS CloudTrail | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"CloudTrail"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <a href="../../../quick/index.html#cloudtrail" style="display:inline-block;margin-bottom:20px;padding:8px 14px;background:#fff;border:1px solid #dce4ec;border-radius:6px;color:#1763c2;font-size:13px;text-decoration:none">← このテーマを約2〜3分で復習する</a>
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">AWS操作の監査</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950">AWS CloudTrail</h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">「誰が・いつ・何をしたか」を記録する。さらに、そのログが配信後に変わっていないかを確かめる。操作履歴と整合性検証を学びます。</p>
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">画像の設問から学ぶ</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">正解は3番目。「ログファイルの整合性検証」を有効にします。</p>
+          <p class="ct-copy mt-2">CloudTrailが生成する署名付きダイジェストを使い、ログの改変や欠落を検証できます。有効化すると検証材料が生成され、実際の検証はAWS CLIなどで行います。</p>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500"><li>CloudTrailの用途と、CloudWatch・VPCフローログとの違いを理解する。</li><li>イベント履歴と証跡、管理イベントとデータイベントを区別する。</li><li>ハッシュ・電子署名・ダイジェストの関係を理解し、CLIで検証する手順を学ぶ。</li></ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">基礎</a><a href="#integrity" class="underline underline-offset-4">整合性検証</a><a href="#practice" class="underline underline-offset-4">実務</a><a href="#case" class="underline underline-offset-4">設問の解説</a></nav>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-6">
+          <div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div>
+          <div class="tb-progress"><div data-progress-bar style="width:0%"></div></div>
+          <p class="mt-2 text-xs text-slate-500">10個の演習の正解状況を、このブラウザに保存します。</p>
+        </div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編</h2><span class="tb-badge is-basic">基礎</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 CloudTrailは、AWS操作の記録係</h3>
+            <div class="ct-copy"><p>AWS CloudTrailは、ユーザー、IAMロール、AWSサービスが行った操作をイベントとして記録するサービスです。コンソール、AWS CLI、SDKなどを通した操作を追い、監査や障害調査に使います。</p><p>たとえば「EC2が停止した」という事象に対し、StopInstancesを実行したロール、時刻、対象インスタンス、リクエスト元などを調べられます。操作の記録であり、EC2内で実行したシェルコマンドやアプリの全処理が自動的に記録されるわけではありません。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>調べたいこと</th><th>主な確認先</th><th>例</th></tr></thead><tbody><tr><td>誰がAWSを操作したか</td><td>CloudTrail</td><td>EC2停止、IAM権限変更、S3オブジェクト取得</td></tr><tr><td>どのようにシステムが動いたか</td><td>CloudWatchのメトリクス・ログ等</td><td>CPU使用率、アプリエラー、レイテンシー</td></tr><tr><td>どの通信が観測されたか</td><td>VPCフローログ</td><td>送信元・宛先IP、ポート、ACCEPT／REJECT</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-user-guide.html" target="_blank" rel="noopener">What Is AWS CloudTrail?</a></p>
+            <div data-quiz data-id="ct-q-purpose" data-answer="b" data-explanation="CloudTrailはAWS操作を調べるための記録です。CPU使用率や通信の許可・拒否は、それぞれ別の情報を使います。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q1. CloudTrailをまず確認する調査は？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ct-q1" value="a"><span>昨日のCPU使用率の最大値</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q1" value="b"><span>誰がEC2の停止APIを呼び出したか</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q1" value="c"><span>TCPパケットの本文</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q1" value="d"><span>アプリのソースコードの内容</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 管理イベントとデータイベント</h3>
+            <div class="ct-copy"><p>CloudTrailで何が記録されるかは、イベントの種類と設定によります。「CloudTrailがあるから全操作が記録される」とは判断せず、必要な操作を収集対象に含めます。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>種類</th><th>主な対象</th><th>設定の考え方</th></tr></thead><tbody><tr><td>管理イベント</td><td>リソースの作成・設定変更・削除など。例：StopInstances、CreateRole</td><td>コントロールプレーンの操作。証跡の基本的な記録対象</td></tr><tr><td>データイベント</td><td>リソースのデータに対する操作。例：S3 GetObject、Lambda Invoke</td><td>必要なリソースや操作を明示して選ぶ。通常は既定で記録されない</td></tr><tr><td>ネットワークアクティビティイベント</td><td>対応サービスのVPCエンドポイント経由のAWS APIアクセス</td><td>追加設定が必要。VPCフローログの通信記録とは対象が異なる</td></tr><tr><td>Insightsイベント</td><td>対応するAPI呼び出し量やエラー率の異常な変化</td><td>追加の分析機能。必要に応じて有効化する</td></tr></tbody></table></div>
+            <div class="ct-note"><strong>医療データの監査なら：</strong>バケットの設定変更だけでなく、オブジェクトの取得や削除を追いたい場合は、S3の該当データイベントも対象にします。ログには操作の情報が記録され、オブジェクト本文が丸ごと保存されるわけではありません。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-events.html" target="_blank" rel="noopener">Understanding CloudTrail events</a></p>
+            <div data-quiz data-id="ct-q-data" data-answer="c" data-explanation="S3 GetObjectはデータイベントです。管理イベントだけの記録では、個々のオブジェクト取得の監査要件を満たしません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q2. S3にある分析データを「誰が取得したか」まで追いたい場合は？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ct-q2" value="a"><span>管理イベントだけで常に十分</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q2" value="b"><span>CPUメトリクスを保存する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q2" value="c"><span>対象S3リソースのGetObjectデータイベントを記録する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q2" value="d"><span>ログ整合性検証だけを有効にすれば取得操作も自動追加される</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.3 JSONログを読む</h3>
+            <p class="ct-copy">次はEC2の停止要求を表す学習用の抜粋です。ロールを引き受けたセッションによる操作を想定しています。</p>
+            <pre class="tb-code mt-4"><code>{
+  "Records": [{
+    "eventTime": "2026-10-28T23:00:00Z",
+    "eventSource": "ec2.amazonaws.com",
+    "eventName": "StopInstances",
+    "awsRegion": "ap-northeast-1",
+    "userIdentity": {
+      "type": "AssumedRole",
+      "arn": "arn:aws:sts::111122223333:assumed-role/Operations/operator-session"
+    },
+    "sourceIPAddress": "192.0.2.10",
+    "requestParameters": {
+      "instancesSet": {
+        "items": [{"instanceId": "i-0123456789abcdef0"}]
+      }
+    }
+  }]
+}</code></pre>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>項目</th><th>読むポイント</th></tr></thead><tbody><tr><td>eventTime</td><td>操作が発生した時刻。ZはUTCで、例は日本時間10月29日8:00</td></tr><tr><td>eventSource / eventName</td><td>どのサービスの、どの操作か</td></tr><tr><td>userIdentity</td><td>IAMユーザー・ロール・セッション等の実行主体</td></tr><tr><td>sourceIPAddress / userAgent</td><td>要求元やクライアントの手掛かり。これだけで人を断定しない</td></tr><tr><td>requestParameters / errorCode</td><td>要求した対象・条件と、失敗があった場合の情報</td></tr></tbody></table></div>
+            <div class="ct-note">操作要求の記録だけで、アプリやリソースの最終状態まで保証されるわけではありません。非同期処理なら、対象リソースの状態も合わせて確認します。また、ログ内の並びがイベント発生順とは限りません。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-event-reference-record-contents.html" target="_blank" rel="noopener">CloudTrailレコードの各項目</a></p>
+            <div data-fill data-id="ct-q-field" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="ct-copy">StopInstancesなど、実行した操作名が入る項目は <span class="tb-fill"><input data-answer="eventname|eventName" aria-label="操作名を示すJSON項目" placeholder="???"></span> です。</p>
+              <button data-fill-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="integrity" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：保存と整合性検証</h2><span class="tb-badge is-applied">応用</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 イベント履歴と「証跡」は別のもの</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>仕組み</th><th>何ができるか</th><th>今回の要件との関係</th></tr></thead><tbody><tr><td>イベント履歴</td><td>各リージョンの過去90日分の管理イベントを検索・表示する。アカウントで自動的に利用可能</td><td>最近の操作の調査向け。データイベントは表示されない</td></tr><tr><td>証跡（Trail）</td><td>対象イベントと配信先を設定し、ログを継続的にS3へ配信する</td><td>長期保存や、S3ログの整合性検証に使う</td></tr><tr><td>組織の証跡</td><td>AWS Organizationsの複数アカウントをまとめて記録する</td><td>全社の監査ログを中央へ集約する構成に使う</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>証跡はログファイルそのものではなく、収集と配信の設定です。マルチリージョン証跡では、適用範囲のリージョンからログを収集できます。記録するイベント、収集範囲、S3保存期間はそれぞれ設計します。</p><p>S3に置いた証跡ログは、Athenaなどで分析できます。必要ならCloudWatch Logsへも配信して監視へつなげます。今回の署名付きダイジェストによる検証は、証跡から配信されるS3ログが対象です。</p></div>
+            <details class="tb-accordion mt-4"><summary>CloudTrail Lakeはどう位置付ける？</summary><div class="tb-accordion-body">CloudTrail Lakeは監査イベントを保存・SQL分析する機能ですが、2026年5月31日から新規顧客の受付が終了しています。既存顧客は継続利用できます。CloudTrailの証跡自体は引き続き提供されています。新規設計ではS3＋AthenaやCloudWatchなど、現在利用できる分析方法を検討します。</div></details>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/view-cloudtrail-events.html" target="_blank" rel="noopener">イベント履歴</a>、<a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/creating-trail-organization.html" target="_blank" rel="noopener">組織の証跡</a>、<a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-lake-service-availability-change.html" target="_blank" rel="noopener">Lakeの提供条件変更</a></p>
+            <div data-quiz data-id="ct-q-trail" data-answer="d" data-explanation="イベント履歴は90日分の管理イベントの確認に使えます。長期の継続記録とS3ログの整合性検証には、証跡の設定と保存・検証の運用が必要です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q4. S3へ長期保存し、配信後のログ改変を検証したい場合は？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ct-q4" value="a"><span>90日分のイベント履歴だけに頼る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q4" value="b"><span>証跡はEC2のAMIなので使わない</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q4" value="c"><span>VPCフローログだけでAWS操作を監査する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q4" value="d"><span>証跡を作成し、S3保存とログ整合性検証を設定する</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 ハッシュ＋電子署名＋ダイジェストの連鎖</h3>
+            <div class="ct-copy"><p>ハッシュは、ファイルの内容から計算する固定長の値です。内容が変わると値も変わります。ただし、ログと比較用ハッシュ値の両方を書き換えられたら、値を比べるだけでは元のログであると確認できません。</p><p>CloudTrailの整合性検証では、ログごとにSHA-256ハッシュを計算します。さらに1時間ごとに、その時間帯に配信したログの参照先とハッシュなどをまとめた<strong>ダイジェストファイル</strong>を配信します。ダイジェストにCloudTrailの秘密鍵で署名することで、比較の基準自体の書き換えも検知します。</p></div>
+            <div class="ct-flow" aria-label="ログ整合性検証の手順"><div><small>01 ログを要約</small><strong>SHA-256ハッシュ</strong><p>ログの内容を値に変換し、ダイジェストへ記録</p></div><div><small>02 比較の基準を保護</small><strong>電子署名</strong><p>CloudTrailの秘密鍵で署名し、対応する公開鍵で確認</p></div><div><small>03 後から照合</small><strong>署名とログを検証</strong><p>ダイジェストを検証し、ログのハッシュを再計算して比較</p></div></div>
+            <div class="ct-copy mt-4"><p>ログとダイジェストは同じ証跡用S3バケットの別プレフィックスに保存されます。ダイジェストは前のダイジェストのハッシュ・署名情報も参照し、連鎖を作ります。現在のダイジェストの署名は、そのS3オブジェクトのメタデータに保存されます。</p><p>監査では、公開鍵による署名の確認、ログのハッシュ照合、ダイジェスト間の連鎖の確認を組み合わせます。対象となるログの改変や欠落を検知できますが、記録対象に設定していない操作まで復元できる仕組みではありません。</p></div>
+            <div class="ct-note"><strong>有効化と検証実行は別です。</strong>有効化は、ダイジェストを生成・配信するための設定です。自動で継続的に検証結果を通知する設定ではありません。CLI等で検証し、継続確認が必要なら実行と通知を定期化します。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-validation-intro.html" target="_blank" rel="noopener">ログファイルの整合性検証</a>、<a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-validation-digest-file-structure.html" target="_blank" rel="noopener">ダイジェストの構造と連鎖</a></p>
+            <div data-quiz data-id="ct-q-digest" data-answer="a,c" data-multiple data-explanation="ダイジェストはログのハッシュ等を含み、署名で基準の真正性を確認します。有効化だけでは実際の検証は行われず、書き換えを防止するロックにもなりません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q5. 正しい説明をすべて選んでください。</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q5" value="a"><span>ダイジェストにはログのハッシュ値が含まれる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q5" value="b"><span>有効化すると、毎回の検証とアラートまで自動設定される</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q5" value="c"><span>電子署名でダイジェストの改変を検知できる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q5" value="d"><span>この設定だけでS3のログは削除できなくなる</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.3 改ざん検知を体験する</h3>
+            <p class="ct-copy">ログだけを変更した場合はハッシュの不一致、比較用ハッシュも変更した場合は署名の不一致で検知します。4つの状態を選び、「検証する」を押して違いを確認してください。</p>
+            <div data-integrity-demo class="integrity-demo mt-5">
+              <h4 class="font-bold text-sky-900">署名付きダイジェストの概念デモ</h4>
+              <p class="text-xs text-slate-500 mt-2 leading-relaxed">ブラウザ内でSHA-256とRSA署名を実際に計算します。デモ用の鍵と簡略化したダイジェストを使い、AWSの署名形式・S3メタデータ・連鎖は再現しません。実際のCloudTrailログの検証には使えません。</p>
+              <div class="integrity-controls"><button type="button" data-integrity-case="original" disabled>元の状態</button><button type="button" data-integrity-case="log" disabled>ログを書き換える</button><button type="button" data-integrity-case="both" disabled>ログとハッシュを書き換える</button><button type="button" data-integrity-case="deleted" disabled>ログを削除した状態</button><button type="button" data-integrity-verify disabled>検証する</button></div>
+              <pre data-integrity-log class="integrity-log">デモを準備しています。</pre>
+              <div class="integrity-fields"><div><h5>ダイジェストに記録されたハッシュ</h5><code data-integrity-recorded>準備中</code></div><div><h5>現在のログから計算したハッシュ</h5><code data-integrity-actual>準備中</code></div><div><h5>ダイジェストの署名</h5><p data-integrity-signature class="font-bold mt-2">未検証</p></div><div><h5>ログのハッシュ照合</h5><p data-integrity-hash class="font-bold mt-2">未検証</p></div></div>
+              <div data-integrity-result class="integrity-result" aria-live="polite">暗号処理を準備しています。</div>
+            </div>
+            <div class="ct-note"><strong>ハッシュだけとの違い：</strong>比較用ハッシュをS3タグや別の設定ストアへ置くだけでは、その値の変更権限や保護も設計する必要があります。CloudTrail標準の方式は、署名と連鎖を含む仕組みを自作せずに利用できます。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-custom-validation.html" target="_blank" rel="noopener">署名とハッシュの検証手順</a></p>
+            <div data-quiz data-id="ct-q-forgery" data-answer="b" data-explanation="比較用ハッシュまで変更されると、ハッシュ同士は一致し得ます。しかし元の秘密鍵で新たな署名を作れなければ、署名検証で不一致を検知できます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q6. ログとダイジェスト内のハッシュ値を両方書き換えた場合、何が検知の決め手になりますか？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ct-q6" value="a"><span>ハッシュ値の文字数</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q6" value="b"><span>元の署名が、変更後のダイジェストに対して有効か</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q6" value="c"><span>オブジェクト名にCloudTrailと入っているか</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q6" value="d"><span>ファイルサイズが大きいか</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="practice" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編</h2><span class="tb-badge is-prac">実務</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 有効化と検証のCLI</h3>
+            <p class="ct-copy">以下は既存の記録中の証跡を使う例です。証跡名・アカウントID・リージョン・時刻は環境に合わせて置換します。証跡の設定変更はホームリージョンで行います。教材はこれらのコマンドを実行しません。</p>
+            <pre class="tb-code mt-4"><code># 1. ダイジェストの生成・配信を有効化（設定変更）
+aws cloudtrail update-trail \
+  --name audit-trail \
+  --enable-log-file-validation \
+  --region ap-northeast-1
+
+# 2. 設定と配信状況を確認（参照操作）
+aws cloudtrail get-trail \
+  --name audit-trail --region ap-northeast-1
+
+aws cloudtrail get-trail-status \
+  --name audit-trail --region ap-northeast-1
+
+# 3. 対象期間を検証（参照操作）
+aws cloudtrail validate-logs \
+  --trail-arn arn:aws:cloudtrail:ap-northeast-1:111122223333:trail/audit-trail \
+  --start-time 2026-10-27T00:00:00Z \
+  --end-time 2026-10-28T00:00:00Z \
+  --region ap-northeast-1 \
+  --verbose</code></pre>
+            <div class="ct-copy mt-4"><p><code>get-trail</code>では <code>LogFileValidationEnabled</code>、<code>get-trail-status</code>では記録状態やダイジェスト配信エラーなどを確認します。有効化後、ダイジェスト配信が始まるまでおよそ1時間かかります。検証期間は、実際にダイジェストが生成された期間に合わせます。</p><p><code>validate-logs</code>はS3上のログとダイジェストを取得して検証します。対象S3への読み取り、バケットの所在確認、必要なCloudTrail操作などの権限が必要です。SSE-KMSで暗号化している場合は、対象キーによる復号権限も確認します。</p></div>
+            <div class="ct-note"><strong>標準CLIの前提：</strong>ログとダイジェストをCloudTrailが配信した元のS3の場所で利用します。ローカルへダウンロードしたファイルだけを渡す検証コマンドではありません。移動済みログには別途カスタム検証が必要になります。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-validation-enabling.html" target="_blank" rel="noopener">整合性検証の有効化</a>、<a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-validation-cli.html" target="_blank" rel="noopener">CLIによる検証と前提条件</a></p>
+            <div class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q7. 正しい順に並べ替えてください。</p>
+              <ul data-sortable data-id="ct-q-procedure" data-answer="enable,deliver,validate,record" class="tb-sortable"><li data-id="validate">対象期間を指定してvalidate-logsを実行する</li><li data-id="enable">証跡で整合性検証を有効にする</li><li data-id="record">結果を記録し、不一致・欠落・エラーを調査する</li><li data-id="deliver">ログとダイジェストが配信されていることを確認する</li></ul>
+              <p data-sortable-feedback class="text-sm text-slate-500 mt-3">ドラッグまたは矢印ボタンで変更すると判定します。</p>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 継続的な検証と結果の読み方</h3>
+            <div class="ct-copy"><p>画像の要件を継続運用へ落とし込むなら、標準の整合性検証を有効にしたうえで、CLIを実行するジョブを定期化します。たとえばEventBridge SchedulerでSSM Automation等を起動し、CLIを実行する環境へつなぎます。検証結果の保存と、失敗・未実行時の通知を設定します。</p><p>「検証に成功したもの」だけでなく、想定期間のダイジェストが揃っているか、検証対象が0件になっていないかも確認します。エラー時は、改ざんだけでなくS3権限、KMS権限、配信障害、リージョンや対象時刻の指定を調べます。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>結果・状況</th><th>意味と次の確認</th></tr></thead><tbody><tr><td>Log file: valid</td><td>参照元ダイジェストを含め検証でき、配信後にログ内容が変わっていない</td></tr><tr><td>hash value doesn't match</td><td>ログ内容のハッシュが記録値と一致しない</td></tr><tr><td>signature verification failed</td><td>ダイジェストの署名が有効ではなく、参照するログへの信頼を確立できない</td></tr><tr><td>not found／取得エラー</td><td>欠落・削除、場所の指定、アクセス権などを調査する</td></tr><tr><td>ダイジェストが不足</td><td>機能の無効化、記録停止、配信遅延・障害などを確認する</td></tr></tbody></table></div>
+            <div class="ct-note"><strong>過去へさかのぼって生成されません。</strong>整合性検証が無効だった間に配信されたログのダイジェストは、後から有効化しても作成されません。機能の無効化や記録停止で連鎖が切れることもあります。定期確認では配信エラーや欠損期間も記録します。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/cli/latest/reference/cloudtrail/validate-logs.html" target="_blank" rel="noopener">validate-logs</a>、<a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-validation-digest-file-structure.html" target="_blank" rel="noopener">ダイジェスト連鎖と配信エラー</a></p>
+            <div data-quiz data-id="ct-q-gap" data-answer="a" data-explanation="無効期間に配信したログのダイジェストは、後から自動的に作られません。検証結果と、検証できない期間を分けて扱います。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q8. 昨日まで整合性検証が無効で、今日有効にしました。昨日配信されたログは？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ct-q8" value="a"><span>昨日分のダイジェストは後から自動生成されない</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q8" value="b"><span>過去90日分の署名が自動で追加される</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q8" value="c"><span>S3タグが自動で電子署名へ変わる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q8" value="d"><span>イベント履歴がすべて削除される</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.3 検知・削除防止・暗号化を組み合わせる</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>目的</th><th>主な仕組み</th><th>役割</th></tr></thead><tbody><tr><td>配信後の変更を検知</td><td>CloudTrailの整合性検証</td><td>署名とハッシュを照合する</td></tr><tr><td>削除・上書きを制限</td><td>S3 Object Lock、IAM・バケットポリシー</td><td>保持期間や権限により保存したオブジェクトバージョンを保護する</td></tr><tr><td>過去版を保持</td><td>S3バージョニング</td><td>履歴の保存・復旧に使う。権限次第では過去版も削除可能</td></tr><tr><td>内容の機密性を保護</td><td>S3のサーバー側暗号化、KMS等</td><td>保存内容を暗号化し、読み取りを制御する</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>組織の証跡を監査用アカウントのS3へ集約し、書き込み・削除・検証の権限を分離する構成も使われます。監査側が必要なログとダイジェストを読み取れるようにし、記録停止や証跡設定の変更も監視します。</p><p>Object LockはS3のオブジェクトバージョンを保護する機能です。署名付きダイジェストによる検証と役割が異なります。暗号化も、CloudTrailの配信元とログ内容の整合性を確認する処理の代わりにはなりません。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html" target="_blank" rel="noopener">S3 Object Lock</a>、<a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/creating-trail-organization.html" target="_blank" rel="noopener">組織の証跡</a></p>
+            <div data-quiz data-id="ct-q-protect" data-answer="a,c" data-multiple data-explanation="整合性検証は変更の検知、Object Lockは保存したバージョンの保護です。暗号化やアクセス制御も別の役割として組み合わせます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q9. 正しい説明をすべて選んでください。</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q9" value="a"><span>整合性検証は、配信後の内容変更を検知する仕組み</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q9" value="b"><span>暗号化したログは、権限があっても絶対に削除できない</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q9" value="c"><span>Object Lockと整合性検証は、異なる目的で組み合わせられる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q9" value="d"><span>検証に成功すれば、記録対象外の操作も監査できる</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：画像の設問を解く</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <h3 class="text-lg font-bold text-sky-900 mb-3">ログの真正性を、少ない運用負担で検証したい</h3>
+          <p class="ct-copy">求められているのは、作成・配信されたログが後から変わっていないかを確かめる手段です。既存のCloudTrail標準機能を使う3番目が、最も直接的に要件を満たします。</p>
+          <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>選択肢</th><th>判断</th><th>理由</th></tr></thead><tbody><tr><td>1. Lambdaでハッシュを計算しS3タグへ保存</td><td>最適ではない</td><td>タグ自体の変更対策、検証処理、例外対応などを自作する必要がある</td></tr><tr><td>2. Lambdaでハッシュを計算しParameter Storeへ保存</td><td>最適ではない</td><td>標準機能で可能なことに、別の保存先・権限・実装の運用が増える</td></tr><tr><td>3. 証跡でログファイルの整合性検証を有効化</td><td>正解</td><td>CloudTrailが署名付きダイジェストを生成し、標準CLI等で照合できる</td></tr><tr><td>4. S3側でCloudTrail専用の検証機能を有効化</td><td>誤り</td><td>設定するのはCloudTrailの証跡。S3チェックサムやObject Lockとは異なる</td></tr></tbody></table></div>
+          <div class="ct-note"><strong>「継続的に確認」の実装：</strong>選択肢3で検証の基盤を整え、必要な頻度で検証ジョブを実行します。監査チームは必要時にも同じ仕組みで検証できます。設定だけで検証が毎回自動実行される、という意味ではありません。</div>
+          <div data-quiz data-id="ct-q-final" data-answer="c" data-explanation="CloudTrail標準の整合性検証は、署名付きダイジェストを生成する仕組みです。監査側はCLI等でログとダイジェストを検証でき、独自のハッシュ管理を一から作る負担を減らせます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+            <p class="font-semibold mb-3">Q10. 画像の要件に最も合う構成は？</p>
+            <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ct-q10" value="a"><span>ログと比較用ハッシュを、変更可能なS3タグだけで管理する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q10" value="b"><span>Parameter Storeでログを暗号化する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q10" value="c"><span>証跡の整合性検証を有効にし、署名付きダイジェストで検証する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q10" value="d"><span>イベント履歴の表示列を増やすだけにする</span></label></li></ul>
+            <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="s3-insights" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">5</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">S3アクセス調査とCloudTrail Insights</h2></div>
+        <div class="space-y-5">
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">大量のLISTリクエストの送信元を調べる</h3><p class="ct-copy mt-3">S3サーバーアクセスログは送信元IP、リクエスタ、操作、HTTP状態などを記録します。CloudTrailでは<code>ListObjects</code>／<code>ListObjectVersions</code>などをS3オブジェクトのデータイベントとして記録でき、IAMプリンシパルやUser-Agentを追跡できます。データイベントは既定で無効かつ有料なので、事前に有効化した範囲だけを遡れます。</p><p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/cloudtrail-logging-s3-info.html" target="_blank" rel="noopener">S3のCloudTrailイベント</a></p></div>
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">API活動の統計的な逸脱を検出する</h3><p class="ct-copy mt-3">CloudTrail Insightsは管理イベントの書き込みAPIコール率と、読み書きAPIのエラー率について通常パターンを学習し、逸脱をInsightsイベントとして記録します。GuardDutyの脅威検出、Inspectorの脆弱性評価、Configの構成準拠とは目的が異なります。EventBridgeで通知や自動対応へつなげます。</p></div>
+        </div>
+        <div data-quiz data-id="ct-q11" data-answer="c" data-explanation="APIコール率やエラー率の通常パターンからの逸脱はCloudTrail Insightsが担当します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q11. API活動の異常な増減を自動検出する機能は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ct-q11" value="a"><span>AWS Config</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q11" value="b"><span>Amazon Inspector</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q11" value="c"><span>CloudTrail Insights</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+      </section>
+
+      <section>
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">5</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">次のステップ</h2></div>
+        <div class="grid sm:grid-cols-2 gap-5">
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">公式資料で深める</h3><ul class="mt-4 text-sm text-sky-700 space-y-3"><li><a class="underline" href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-validation-intro.html" target="_blank" rel="noopener">整合性検証の概要</a></li><li><a class="underline" href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-validation-digest-file-structure.html" target="_blank" rel="noopener">ダイジェストの構造</a></li><li><a class="underline" href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-validation-cli.html" target="_blank" rel="noopener">標準CLIによる検証</a></li></ul></div>
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">関連する教材</h3><ul class="mt-4 text-sm text-sky-700 space-y-3"><li><a class="underline" href="vpc-flow-logs.html">VPCフローログ：通信の観測</a></li><li><a class="underline" href="systems-manager.html">Systems Manager：運用の自動化</a></li><li><a class="underline" href="service-quotas.html">Service Quotas：リソース上限</a></li></ul></div>
+        </div>
+        <p class="text-xs text-slate-500 leading-relaxed mt-5">2026年10月29日にAWS公式資料を確認。暗号デモと設問はブラウザ内で動作し、AWSアカウントへの操作やログ送信は行いません。</p>
+      </section>
+    </article>
+  </main>
+  <script src="../../../assets/shared.js?v=20261029-5"></script>
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ja" data-topic-id="cloud-aws-control-tower">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="AWS OrganizationsとAWS Control Towerによるマルチアカウント統制、ランディングゾーン、ベースライン、SCP、リージョン拒否コントロールを学ぶ通常版教材。">
+  <title>AWS Control TowerとOrganizations | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"Control Tower"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">通常版 · 約55分</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">AWS Control TowerとOrganizations</h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">複数のAWSアカウントを、OU・ベースライン・コントロールで一貫して管理する。承認リージョンだけを利用させる金融サービス企業のケースから、予防的統制と標準化を学びます。</p>
+
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">今回の設問の結論</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">承認リージョンを統制対象に選び、Control TowerのRegion deny予防的コントロールを有効化します。</p>
+          <div class="ct-flow mt-5" aria-label="リージョン統制の推奨フロー">
+            <div><small>LANDING ZONE</small><strong>統制対象リージョン</strong><p>ベースラインとコントロールを展開する範囲</p></div>
+            <div><small>PREVENTIVE</small><strong>Region deny</strong><p>対象外リージョンへのAPI要求をSCPで拒否</p></div>
+            <div><small>OU / ACCOUNT</small><strong>ベースライン継承</strong><p>登録OUと新規アカウントへ標準構成を適用</p></div>
+          </div>
+          <div class="ct-note"><strong>重要：</strong>統制対象リージョンを選ぶだけでは、対象外リージョンへのリソース作成は禁止されません。対象外リージョンは「Control Towerが統制しない」状態になるだけです。作成自体を止めるにはRegion denyコントロールを明示的に有効化します。</div>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500"><li>Organizations、OU、Control Towerランディングゾーンの役割を説明する。</li><li>ベースラインとAccount Factoryで標準構成を継承させる。</li><li>予防的・発見的・プロアクティブコントロールを使い分ける。</li><li>統制対象リージョンとRegion denyの違いを理解する。</li><li>SCPの権限上限、継承、管理アカウント例外を説明する。</li></ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#foundation" class="underline underline-offset-4">基礎</a><a href="#controls" class="underline underline-offset-4">リージョン統制</a><a href="#operations" class="underline underline-offset-4">実務運用</a><a href="#case" class="underline underline-offset-4">設問演習</a></nav>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-6"><div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div><div class="tb-progress"><div data-progress-bar style="width:0%"></div></div><p class="mt-2 text-xs text-slate-500">9問の正解状況を、このブラウザに保存します。</p></div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="foundation" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編：マルチアカウントの骨格を作る</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 OrganizationsとControl Towerの役割</h3>
+            <div class="ct-copy"><p>AWS Organizationsは、複数のAWSアカウントを組織へまとめ、組織単位（OU）を階層化し、ポリシーを継承させる土台です。AWS Control TowerはOrganizationsを含む複数サービスをオーケストレーションし、ベストプラクティスに沿うランディングゾーンを構築・運用します。</p><p>ランディングゾーンには管理アカウント、ログアーカイブアカウント、監査アカウントなどの共有構成が含まれます。ワークロードは開発・検証・本番などのOUとメンバーアカウントへ分離し、管理アカウントには通常のワークロードを置かない設計が基本です。</p></div>
+            <div class="ct-flow" aria-label="Organizationsの階層"><div><small>ORGANIZATION</small><strong>管理アカウント</strong><p>組織・請求・Control Towerを管理</p></div><div><small>OU</small><strong>Production / NonProduction</strong><p>統制境界とポリシー継承単位</p></div><div><small>MEMBER ACCOUNT</small><strong>個別ワークロード</strong><p>障害・権限・請求の境界</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/controltower/latest/userguide/what-is-control-tower.html" target="_blank" rel="noopener">AWS Control Towerとは</a></p>
+            <div data-quiz data-id="ct-q1" data-answer="b" data-explanation="OrganizationsはアカウントとOUの階層・ポリシー管理の土台で、Control Towerはランディングゾーンと統制をマネージドに構成します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q1. Control Towerの位置づけとして最も適切なのは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ct-q1" value="a"><span>単一EC2インスタンスのパッチツール</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q1" value="b"><span>Organizations等を利用してランディングゾーンを構築・統制するサービス</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q1" value="c"><span>DNSレコードを管理するサービス</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q1" value="d"><span>DBの読み取りレプリカ</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 ベースラインとAccount Factory</h3>
+            <div class="ct-copy"><p>ベースラインは、対象へ適用するリソースと構成のまとまりです。OUをControl Towerへ登録して<code>AWSControlTowerBaseline</code>を有効化すると、そのOUのメンバーアカウントへコンプライアンス監視、監査、セキュリティ監視などに必要な構成が継承されます。</p><p>Account Factoryで新しいアカウントを登録済みOUへ発行すると、そのOUのベースラインとコントロールを継承します。アカウントごとにConfigルールやIAMロールを手作業で配布するより、一貫性と運用効率を高められます。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">要素</th><th scope="col">主な役割</th></tr></thead><tbody><tr><th scope="row">ランディングゾーン</th><td>組織全体の共有アカウント、リージョン、統制の基盤</td></tr><tr><th scope="row">AWSControlTowerBaseline</th><td>OU配下のアカウントへ標準リソースと構成を継承</td></tr><tr><th scope="row">コントロール</th><td>禁止・検知・デプロイ前検査などの統制をOUへ適用</td></tr><tr><th scope="row">Account Factory</th><td>承認済みの設定で新しいメンバーアカウントを発行</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/controltower/latest/userguide/types-of-baselines.html" target="_blank" rel="noopener">Control Towerのベースライン</a>、<a href="https://docs.aws.amazon.com/controltower/latest/userguide/account-factory.html" target="_blank" rel="noopener">Account Factory</a></p>
+            <div data-fill data-id="ct-q2" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q2. 新しいAWSアカウントを標準化された設定で発行するControl Towerの機能は？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="Account Factory|アカウントファクトリー" aria-label="標準アカウント発行機能" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="controls" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：コントロールとリージョン制限</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 予防・発見・プロアクティブを分ける</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">動作</th><th scope="col">タイミング</th><th scope="col">代表的な実装</th></tr></thead><tbody><tr><th scope="row">予防的</th><td>API要求時に禁止操作を拒否</td><td>SCP</td></tr><tr><th scope="row">発見的</th><td>作成済みリソースの違反を継続評価</td><td>AWS Configルール</td></tr><tr><th scope="row">プロアクティブ</th><td>CloudFormationでのデプロイ前にリソースを検査</td><td>CloudFormationフック</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>「未承認リージョンに作らせない」という要件には予防的コントロールが合います。ConfigルールやLambdaで検知して削除する方式は、違反リソースが一時的に存在し、削除失敗や運用コードの保守も発生するため、第一選択ではありません。</p></div>
+            <div data-quiz data-id="ct-q3" data-answer="a" data-explanation="リソース作成前にAPI要求自体を止めるのは予防的コントロールです。Configによる評価は発見的です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q3. 未承認リージョンへの作成要求を実行前に拒否する統制は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ct-q3" value="a"><span>予防的コントロール</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q3" value="b"><span>発見的コントロール</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q3" value="c"><span>コスト配分タグ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q3" value="d"><span>バックアップ保持期間</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 統制対象リージョンは許可リストではない</h3>
+            <div class="ct-copy"><p>ランディングゾーン設定の「統制対象リージョン」は、Control Towerがベースラインやリージョン対応コントロールを展開・監視する範囲です。リージョンを統制対象から外しても、そのリージョンでリソースを作成できなくなるわけではありません。単にControl Towerのガバナンス外となります。</p><p>承認外リージョンへのAPI操作を拒否するには、ランディングゾーン全体のRegion denyコントロール <code>AWS-GR_REGION_DENY</code> を有効化します。OUごとに異なる許可リージョンが必要なら、構成可能なOU単位の <code>CT.MULTISERVICE.PV.1</code> を検討します。</p></div>
+            <div class="ct-note"><strong>混同しない：</strong>①承認リージョンを統制対象に選ぶ、②Region denyを有効化する、③OUを登録してベースラインを適用する、の3つは別の操作です。リージョン構成変更後、既存アカウントへ反映するためOUの再登録・更新が必要になる場合があります。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/controltower/latest/userguide/region-how.html" target="_blank" rel="noopener">Control Towerとリージョン</a>、<a href="https://docs.aws.amazon.com/controltower/latest/userguide/region-deny.html" target="_blank" rel="noopener">Region denyの設定</a></p>
+            <div data-quiz data-multiple data-id="ct-q4" data-answer="a,c" data-explanation="統制対象リージョンはControl Towerが統制を展開する範囲です。対象外での作成を止めるにはRegion denyを別途有効化します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q4. リージョン設定について正しいものを2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q4" value="a"><span>統制対象外リージョンでも、Region denyがなければリソースを作成できる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q4" value="b"><span>統制対象リージョンを選ぶだけで、他リージョンは自動的に拒否される</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q4" value="c"><span>Region denyはSCPで実装される予防的コントロールである</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q4" value="d"><span>Control TowerのホームリージョンはRegion denyで拒否できる</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.3 SCPは権限を与えず、上限を決める</h3>
+            <div class="ct-copy"><p>Service Control Policy（SCP）は、組織ルート、OU、アカウントへ付ける権限の上限です。SCPで許可しただけでは操作権限は付与されず、IAMポリシーなどのAllowも必要です。一方、適用されるSCPに明示的Denyがあれば、メンバーアカウントのAdministratorAccessやrootユーザーでも実行できません。</p><p>リージョン拒否ではグローバル条件キー<code>aws:RequestedRegion</code>を使います。ただしIAM、Organizations、Route 53などのグローバルサービスや、クロスリージョン動作を必要とするAPIには例外設計が必要です。Control Tower管理のSCPを直接編集するとドリフトになるため、管理機能から設定します。</p></div>
+            <pre class="mt-4 overflow-x-auto rounded-2xl bg-slate-900 p-4 text-xs leading-6 text-sky-100"><code>{
+  "Effect": "Deny",
+  "NotAction": ["iam:*", "organizations:*", "route53:*"],
+  "Resource": "*",
+  "Condition": {
+    "StringNotEquals": {
+      "aws:RequestedRegion": ["ap-northeast-1", "ap-southeast-2"]
+    }
+  }
+}</code></pre>
+            <p class="mt-2 text-xs text-slate-500">概念例です。実際はControl TowerのRegion denyコントロールと公式の例外一覧を使用し、影響をテストします。</p>
+            <div class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-7 text-amber-950"><strong>管理アカウント例外：</strong>SCPはメンバーアカウントに適用されますが、Organizationsの管理アカウント内のユーザーとロールには影響しません。管理アカウントをワークロード用途に使わず、アクセスを厳格に管理します。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html" target="_blank" rel="noopener">Service Control Policy</a>、<a href="https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps_syntax.html" target="_blank" rel="noopener">SCP構文とリージョン制限例</a></p>
+            <div data-quiz data-multiple data-id="ct-q5" data-answer="b,d" data-explanation="SCPは権限の上限であり、権限を付与しません。明示的Denyはメンバーアカウントの管理者権限より優先します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q5. SCPについて正しいものを2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q5" value="a"><span>SCPのAllowだけでIAM権限を付与できる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q5" value="b"><span>メンバーアカウントが行使できる権限の上限を決める</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q5" value="c"><span>管理アカウント内のユーザーにも同じように適用される</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q5" value="d"><span>明示的DenyはメンバーアカウントのAdministratorAccessより優先する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="operations" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：安全に展開し、継続運用する</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 推奨する導入順序</h3>
+            <ol class="list-decimal pl-5 space-y-3 text-sm leading-7 text-slate-700 marker:font-bold marker:text-sky-600"><li>ワークロード配置方針からホームリージョンと追加の統制対象リージョンを決めます。</li><li>ランディングゾーンを構築し、ログアーカイブ・監査アカウントを分離します。</li><li>開発・検証・本番などのOUを登録し、<code>AWSControlTowerBaseline</code>を有効化します。</li><li>ランディングゾーン全体またはOU単位でRegion denyを有効化し、許可リージョンと例外を定義します。</li><li>サンドボックスOUで拒否動作とグローバルサービスへの影響を検証します。</li><li>Account Factoryで新規アカウントを発行し、既存OU・アカウントも必要に応じて再登録・更新します。</li><li>ベースラインとコントロールのドリフト、Configの準拠状況、CloudTrail操作を継続監視します。</li></ol>
+            <div data-quiz data-id="ct-q6" data-answer="c" data-explanation="強いSCPはまず検証用OUへ適用し、グローバルサービスや既存リソースへの影響を確認してから段階展開します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q6. Region denyを本番OUへ展開する前に優先することは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ct-q6" value="a"><span>管理アカウントへ本番アプリを移動する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q6" value="b"><span>すべての例外を削除する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q6" value="c"><span>サンドボックスOUでAPIとグローバルサービスへの影響を検証する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q6" value="d"><span>Configで違反を検知するまで待つ</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 独自実装を増やさない</h3>
+            <div class="ct-copy"><p>全アカウントへLambdaを配布して未承認リージョンのリソースを削除する設計は、検知の遅延、削除権限、再試行、例外処理、ログ、コード更新を自社で管理する必要があります。Configルールだけの方式も発見的で、作成前の拒否にはなりません。</p><p>共通要件はControl Tower管理のコントロールとベースラインへ寄せます。標準機能で表現できない独自要件だけをカスタムSCPやAccount Factory Customizationなどへ分離し、Control Towerが管理するリソースを直接変更しないことが運用効率につながります。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">方式</th><th scope="col">問題点・使いどころ</th></tr></thead><tbody><tr><th scope="row">Configで検知・削除</th><td>事後対応。準拠状況の可視化には有効</td></tr><tr><th scope="row">Lambdaで自動削除</th><td>事後対応に加え、コードと全アカウント展開の保守が必要</td></tr><tr><th scope="row">ユーザー別IAM権限</th><td>ユーザー数に比例して管理が増え、別経路のロールを覆えない</td></tr><tr><th scope="row">Control Tower＋SCP</th><td>OU単位で予防し、新規アカウントへ継承できる</td></tr></tbody></table></div>
+            <div data-quiz data-id="ct-q7" data-answer="d" data-explanation="共通のリージョン禁止はControl Tower管理のSCPコントロールで予防するのが、最も一元的で運用負荷が低い方法です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q7. 全アカウントで未承認リージョンの作成を防ぐ最も運用効率のよい方式は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ct-q7" value="a"><span>各ユーザーへ個別IAMポリシー</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q7" value="b"><span>各アカウントのLambdaで削除</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q7" value="c"><span>Configで作成後に検知するだけ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ct-q7" value="d"><span>Control TowerのRegion deny予防的コントロール</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：金融サービス企業のリージョン統制</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <div class="ct-copy"><p>要件は、Control Towerで構築するすべてのメンバーアカウントへ標準ベースラインを適用し、承認外リージョンでの作成を事前に拒否することです。最もマネージドな実装は、承認リージョンをControl Towerの統制対象に設定し、ランディングゾーンのRegion denyを有効化し、登録OUへ<code>AWSControlTowerBaseline</code>を適用することです。</p><p>提示された選択肢だけで2つ選ぶ試験問題では、「<code>aws:RequestedRegion</code>を使うSCP」と「ランディングゾーンのリージョン設定」が想定解です。ただし、後者だけでは拒否になりません。実装時は別々の独自SCPとControl Tower管理SCPを重ねるのではなく、Control TowerのRegion denyコントロールとして管理するのが基本です。</p></div>
+          <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">提示された選択肢</th><th scope="col">判定</th><th scope="col">実務上の補足</th></tr></thead><tbody><tr><th scope="row">各アカウントへConfig＋削除</th><td>不正解</td><td>発見的・事後対応で個別管理が増える</td></tr><tr><th scope="row">各アカウントへLambda＋削除</th><td>不正解</td><td>事後対応で、独自コードの保守が必要</td></tr><tr><th scope="row"><code>aws:RequestedRegion</code>のSCP</th><td>正解の原理</td><td>Control Tower管理のRegion denyとして有効化する</td></tr><tr><th scope="row">統制対象リージョンを更新</th><td>正解の一部</td><td>ベースライン展開範囲。拒否にはRegion denyも必要</td></tr><tr><th scope="row">ユーザー別Identity Center設定</th><td>不正解</td><td>組織・OU単位の一貫した権限上限にならない</td></tr></tbody></table></div>
+          <div data-quiz data-multiple data-id="ct-q8" data-answer="c,d" data-explanation="承認リージョンを統制対象として選び、Control TowerのRegion denyを有効化します。登録OUへAWSControlTowerBaselineを適用すれば、新規アカウントも標準構成を継承します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q8. 要件を最も運用効率よく満たす実装を2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q8" value="a"><span>全アカウントへ削除用Lambdaを個別配布する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q8" value="b"><span>統制対象外リージョンを選ぶだけで禁止を完了する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q8" value="c"><span>承認リージョンを統制対象にし、Region deny予防的コントロールを有効化する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q8" value="d"><span>OUを登録してAWSControlTowerBaselineを有効化し、Account Factoryから発行する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ct-q8" value="e"><span>ユーザーごとに個別のリージョン制限ポリシーを作る</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          <div data-fill data-id="ct-q9" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q9. SCPでAPIリクエスト先リージョンを評価するグローバル条件キーは？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="aws:RequestedRegion|RequestedRegion" aria-label="リージョン評価の条件キー" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+        </div>
+      </section>
+    </article>
+
+    <section class="mt-12"><h2 class="text-xl font-bold text-sky-950 mb-4">次のステップ</h2><div class="tb-card p-5 sm:p-6"><ul class="space-y-3 text-sm text-slate-700"><li><a class="text-sky-700 underline" href="iam.html">AWS IAM</a>：IAMポリシーとSCPを組み合わせた実効権限を理解する。</li><li><a class="text-sky-700 underline" href="cloudtrail.html">AWS CloudTrail</a>：組織の証跡で全アカウントのAPI操作を集約する。</li><li><a class="text-sky-700 underline" href="service-quotas.html">AWS Service Quotas</a>：クォータとSCPによる制限の違いを理解する。</li><li><a class="text-sky-700 underline" href="https://docs.aws.amazon.com/controltower/latest/userguide/region-deny.html" target="_blank" rel="noopener">AWS公式：Region denyコントロール</a></li><li><a class="text-sky-700 underline" href="https://docs.aws.amazon.com/controltower/latest/userguide/types-of-baselines.html" target="_blank" rel="noopener">AWS公式：Control Towerのベースライン</a></li></ul></div></section>
+    <div class="mt-10 text-center"><a href="../../../index.html" class="inline-block rounded-full bg-white text-sky-700 ring-1 ring-sky-200 px-6 py-3 text-sm font-semibold shadow-sm">← 通常版の教材一覧へ</a></div>
+  </main>
+  <footer class="text-center text-xs text-slate-400 pb-10">Engineer Textbook · AWS Control Tower · 公式資料確認：2026-10-30</footer>
+  <script src="../../../assets/shared.js?v=20261030-1"></script>
+</body>
+</html>

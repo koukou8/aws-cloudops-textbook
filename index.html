@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<!--
+  Engineer Textbook — top page template
+  -----------------------------------------------------------------
+  このファイルは初回 ./materials/index.html を作成するときに
+  そのままコピーして使う。プレースホルダはない (ランタイムで index.json を読む)。
+-->
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Engineer Textbook</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="./assets/shared.css">
+<style>
+  /* category card */
+  .ix-cat {
+    background: #fff;
+    border-radius: 1.5rem;
+    box-shadow: 0 1px 2px rgba(2,132,199,.06), 0 8px 24px rgba(14,165,233,.04);
+    outline: 1px solid rgba(186,230,253,.6);
+    outline-offset: -1px;
+    padding: 1.25rem 1.5rem;
+  }
+  .ix-topic {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem;
+    background: #f0f9ff;
+    border-radius: 1rem;
+    padding: 0.875rem 1.125rem;
+    text-decoration: none;
+    transition: background .15s, transform .15s;
+  }
+  .ix-topic:hover { background: #e0f2fe; transform: translateX(2px); }
+  .ix-empty { padding: 4rem 1rem; text-align: center; color: #64748b; }
+</style>
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+      <div class="font-bold text-sky-900 tracking-tight">
+        <span class="inline-block align-middle">📘</span>
+        Engineer Textbook
+      </div>
+      <input id="ix-search" type="search" placeholder="教材を検索..."
+        class="rounded-full bg-sky-50 px-4 py-2 text-sm placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-sky-300 w-44 sm:w-72">
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-10 pb-24">
+    <a href="./topics/cloud/aws/route53-cloudfront.html" style="display:block;margin-bottom:16px;padding:16px 20px;background:#fff;border:1px solid #bae6fd;border-radius:16px;color:#075985;text-decoration:none;font-weight:700">新着教材：Route 53 × CloudFront → エイリアスA・AAAA、CNAME、独自ドメインを10問で演習</a>
+    <a href="./quick/index.html" style="display:block;margin-bottom:24px;padding:16px 20px;background:#fff;border:1px solid #dce4ec;border-radius:8px;color:#1763c2;text-decoration:none;font-weight:700">AWS さっと復習 → 7テーマを1つずつ、約2〜3分で確認</a>
+    <!-- Hero -->
+    <section class="relative pb-8">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight text-sky-950 leading-tight">
+          ブラウザで学ぶ、<br class="hidden sm:block">エンジニアの教科書
+        </h1>
+        <p class="mt-4 text-sky-800/80 text-base sm:text-lg max-w-2xl">
+          基礎から実務まで、お題ごとにインタラクティブな教材で学べます。気になるカテゴリから始めましょう。
+        </p>
+        <div class="mt-6 flex flex-wrap gap-2 text-xs">
+          <span class="tb-badge">基礎 → 応用 → 実務</span>
+          <span class="tb-badge">クイズ・コード演習</span>
+          <span class="tb-badge">進捗を自動保存</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats -->
+    <section class="grid grid-cols-3 gap-3 sm:gap-4 mt-2 mb-10">
+      <div class="tb-card p-4 sm:p-5 text-center">
+        <div class="text-2xl sm:text-3xl font-extrabold text-sky-700" id="ix-count-cat">—</div>
+        <div class="text-xs sm:text-sm text-slate-500 mt-1">カテゴリ</div>
+      </div>
+      <div class="tb-card p-4 sm:p-5 text-center">
+        <div class="text-2xl sm:text-3xl font-extrabold text-sky-700" id="ix-count-topic">—</div>
+        <div class="text-xs sm:text-sm text-slate-500 mt-1">教材</div>
+      </div>
+      <div class="tb-card p-4 sm:p-5 text-center">
+        <div class="text-2xl sm:text-3xl font-extrabold text-sky-700" id="ix-count-done">—</div>
+        <div class="text-xs sm:text-sm text-slate-500 mt-1">学習済み</div>
+      </div>
+    </section>
+
+    <!-- Categories -->
+    <section id="ix-cats" class="space-y-6"></section>
+
+    <!-- Empty state -->
+    <template id="ix-empty-tpl">
+      <div class="ix-empty">
+        <div class="text-4xl mb-3">📭</div>
+        <p class="text-base font-semibold text-slate-700">まだ教材がありません</p>
+        <p class="text-sm mt-1">Claude に「{お題} の教材を作って」と頼んでみましょう</p>
+      </div>
+    </template>
+  </main>
+
+  <footer class="text-center text-xs text-slate-400 pb-10">
+    Engineer Textbook
+  </footer>
+
+<script>
+(async function () {
+  const root = document.getElementById('ix-cats');
+  const empty = document.getElementById('ix-empty-tpl');
+
+  let data;
+  try {
+    const res = await fetch('./index.json', { cache: 'no-store' });
+    data = await res.json();
+  } catch (e) {
+    root.innerHTML = `<div class="ix-empty">
+      <div class="text-4xl mb-3">⚠️</div>
+      <p class="text-base font-semibold text-slate-700">index.json を読み込めませんでした</p>
+      <p class="text-sm mt-1">静的サーバーで開いてください: <code>cd materials &amp;&amp; python3 -m http.server 8000</code></p>
+    </div>`;
+    return;
+  }
+
+  const cats = data.categories || [];
+
+  // 集計
+  const allTopics = collectTopics(cats);
+  document.getElementById('ix-count-cat').textContent = cats.length;
+  document.getElementById('ix-count-topic').textContent = allTopics.length;
+
+  // 学習済み数 (各 topic-id について LocalStorage から計算)
+  let done = 0;
+  for (const t of allTopics) {
+    const s = readProgress(t.id);
+    if (Object.values(s).some(v => v && v.ok)) done++;
+  }
+  document.getElementById('ix-count-done').textContent = done;
+
+  // 描画
+  if (!cats.length) {
+    root.appendChild(empty.content.cloneNode(true));
+    return;
+  }
+  cats.forEach(cat => root.appendChild(renderCategory(cat)));
+
+  // 検索
+  const search = document.getElementById('ix-search');
+  search.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    document.querySelectorAll('[data-topic]').forEach(el => {
+      const text = el.dataset.text || '';
+      el.style.display = (!q || text.includes(q)) ? '' : 'none';
+    });
+    document.querySelectorAll('[data-cat-block]').forEach(block => {
+      const visible = [...block.querySelectorAll('[data-topic]')].some(el => el.style.display !== 'none');
+      block.style.display = visible ? '' : 'none';
+    });
+  });
+
+  // ===== helpers =====
+  function collectTopics(nodes) {
+    const out = [];
+    for (const n of nodes) {
+      if (n.path) out.push(n);
+      if (n.children) out.push(...collectTopics(n.children));
+    }
+    return out;
+  }
+  function readProgress(id) {
+    try { return JSON.parse(localStorage.getItem(`tb:progress:${id}`) || '{}'); }
+    catch { return {}; }
+  }
+
+  function renderCategory(cat) {
+    const sec = document.createElement('section');
+    sec.id = cat.id;
+    sec.dataset.catBlock = '';
+
+    const subs = (cat.children || []).filter(c => (c.children && c.children.length) || c.path);
+    sec.innerHTML = `
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-2xl">${escape(cat.iconEmoji || '📂')}</span>
+        <h2 class="text-xl sm:text-2xl font-bold text-sky-950">${escape(cat.name)}</h2>
+      </div>
+      <div class="ix-cat space-y-5"></div>
+    `;
+    const card = sec.querySelector('.ix-cat');
+
+    if (!subs.length) {
+      card.innerHTML = `<p class="text-sm text-slate-500 py-4 text-center">教材なし</p>`;
+      return sec;
+    }
+
+    subs.forEach(sub => {
+      const block = document.createElement('div');
+      const topics = sub.path ? [sub] : (sub.children || []).filter(c => c.path);
+      block.innerHTML = sub.path ? '' : `
+        <div class="flex items-center gap-2 mb-2">
+          <h3 class="text-sm font-semibold text-sky-700 tracking-wide uppercase">${escape(sub.name)}</h3>
+          <span class="text-xs text-slate-400">${topics.length}件</span>
+        </div>
+      `;
+      const list = document.createElement('div');
+      list.className = 'space-y-2';
+      topics.forEach(t => list.appendChild(renderTopic(t)));
+      block.appendChild(list);
+      card.appendChild(block);
+    });
+
+    return sec;
+  }
+
+  function renderTopic(t) {
+    const a = document.createElement('a');
+    a.className = 'ix-topic';
+    a.href = t.path;
+    a.dataset.topic = '';
+    a.dataset.text = `${t.name} ${t.summary || ''}`.toLowerCase();
+
+    const state = readProgress(t.id);
+    const okCount = Object.values(state).filter(v => v && v.ok).length;
+    const totalGuess = Object.values(state).length;
+
+    a.innerHTML = `
+      <div class="min-w-0">
+        <div class="font-semibold text-sky-900 truncate">${escape(t.name)}</div>
+        ${t.summary ? `<div class="text-xs text-slate-500 truncate mt-0.5">${escape(t.summary)}</div>` : ''}
+      </div>
+      <div class="flex items-center gap-3 shrink-0">
+        ${okCount > 0 ? `<span class="tb-badge is-basic">${okCount}問正解</span>` : ''}
+        ${t.estimatedMinutes ? `<span class="text-xs text-slate-400 hidden sm:inline">約${t.estimatedMinutes}分</span>` : ''}
+        <span class="text-sky-500">→</span>
+      </div>
+    `;
+    return a;
+  }
+
+  function escape(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c =>
+      ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+})();
+</script>
+</body>
+</html>

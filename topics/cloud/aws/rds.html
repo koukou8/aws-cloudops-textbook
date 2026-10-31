@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ja" data-topic-id="cloud-aws-rds">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Amazon RDSのDBエンジン、Multi-AZ、リードレプリカ、バックアップ、ストレージ性能、Aurora Global Database、PITRとAurora MySQLバックトラックを学ぶ通常版教材。">
+  <title>Amazon RDS | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"Amazon RDS"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">通常版 · 約75分</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">Amazon RDS</h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">リレーショナルデータベースの運用をAWSに任せ、整合性のある業務データに集中する。医療画像サービスを例に、S3との役割分担から可用性・性能・復旧まで理解します。</p>
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">添付のS3設問との関係</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">画像本体はS3、検索・関連付けに使うメタデータはRDS。</p>
+          <p class="ct-copy mt-2">海外からの画像アップロード速度はS3 Transfer Accelerationで改善します。RDSには患者ID、検査日時、クリニックID、S3オブジェクトキー、処理状態などを保存し、トランザクションやSQL検索に使います。大容量画像をRDSへ直接詰め込むより、サービスの特性を分ける設計が基本です。</p>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500"><li>RDSが管理する範囲と、利用者が設計する範囲を分ける。</li><li>Multi-AZとリードレプリカを可用性・読み取り性能で使い分ける。</li><li>バックアップ、接続、セキュリティ、監視を実務要件へ落とし込む。</li><li>IOPSとスループットを切り分け、gp2・gp3・io1・io2を選ぶ。</li><li>RPO・RTOを読み解き、同一リージョンの高可用性とクロスリージョンDRを区別する。</li><li>PITR・スナップショット復元・Aurora MySQLバックトラックを復元先で使い分ける。</li></ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">基礎</a><a href="#availability" class="underline underline-offset-4">可用性</a><a href="#recovery" class="underline underline-offset-4">復旧</a><a href="#operations" class="underline underline-offset-4">運用</a><a href="#case" class="underline underline-offset-4">構成演習</a><a href="#storage-performance" class="underline underline-offset-4">ストレージ性能</a><a href="#aurora-global-database" class="underline underline-offset-4">リージョンDR</a><a href="#aurora-backtrack" class="underline underline-offset-4">バックトラック</a></nav>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-6"><div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div><div class="tb-progress"><div data-progress-bar style="width:0%"></div></div><p class="mt-2 text-xs text-slate-500">14問の正解状況を、このブラウザに保存します。</p></div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編：マネージドRDBを使う</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 RDSが管理するもの、利用者が管理するもの</h3>
+            <div class="ct-copy"><p>Amazon Relational Database Service（Amazon RDS）は、AWS上でリレーショナルデータベースのセットアップ、運用、スケーリングを容易にするマネージドサービスです。Db2、MariaDB、Microsoft SQL Server、MySQL、Oracle Database、PostgreSQLを選択できます。</p><p>AWSは基盤、データベースソフトウェアのパッチ、バックアップ、障害検知と復旧などを支援します。一方、テーブル設計、インデックス、SQL、ユーザー権限、性能試験、データ保持要件は利用者の責任です。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">AWSが支援・管理</th><th scope="col">利用者が設計・管理</th></tr></thead><tbody><tr><td>基盤、OS、DBソフトウェアの保守</td><td>スキーマ、制約、インデックス、SQL</td></tr><tr><td>自動バックアップ、障害検知、復旧</td><td>保持期間、復旧目標、復元テスト</td></tr><tr><td>監視メトリクスと管理API</td><td>アラーム、運用手順、アプリ接続</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/" target="_blank" rel="noopener">Amazon RDSとは</a></p>
+            <div data-quiz data-id="rds-q1" data-answer="c" data-explanation="RDSは基盤・パッチ・バックアップなどを支援しますが、スキーマやSQL、アプリ固有のデータ設計は利用者が管理します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q1. RDSを使っても利用者が担当するものは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="rds-q1" value="a"><span>物理サーバーの交換</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q1" value="b"><span>データセンターの電源管理</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q1" value="c"><span>テーブル・制約・インデックスの設計</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q1" value="d"><span>ホストOSへのDBパッチ適用</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 S3とRDSを役割分担する</h3>
+            <div class="ct-copy"><p>S3は画像、動画、文書、バックアップなどのオブジェクト保存に向きます。RDSは患者と検査の関連、状態遷移、重複防止、複数テーブルをまたぐ更新など、関係性と整合性が重要なデータに向きます。</p><p>たとえばRDSの <code>exams</code> テーブルには <code>patient_id</code>、<code>clinic_id</code>、<code>captured_at</code>、<code>s3_key</code> を保存します。画像本体はS3に置き、RDSからキーを参照します。</p></div>
+            <div class="ct-flow" aria-label="S3とRDSの役割分担"><div><small>S3</small><strong>画像オブジェクト</strong><p>exam-images/clinic-a/uuid.dcm</p></div><div><small>RDS</small><strong>構造化メタデータ</strong><p>患者、検査、S3キー、処理状態</p></div><div><small>APPLICATION</small><strong>2つを関連付ける</strong><p>SQLで検索し、署名付きURLを発行</p></div></div>
+            <div class="ct-note"><strong>整合性の境界を決めます。</strong>S3へのアップロードとRDSへの行追加は単一のデータベーストランザクションではありません。アップロードIDや状態列を設け、失敗時の再試行・孤立オブジェクト清掃を設計します。</div>
+            <div data-quiz data-id="rds-q2" data-answer="b" data-explanation="大容量画像はS3へ、検索・関連付け・整合性が必要なメタデータはRDSへ保存するのが自然な役割分担です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q2. 医療画像サービスの保存先として最も適切な組み合わせは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="rds-q2" value="a"><span>画像本体も患者情報もすべてRDSの1列へ保存</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q2" value="b"><span>画像本体はS3、患者・検査・S3キーはRDS</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q2" value="c"><span>画像本体はCloudTrail、患者情報はVPCフローログ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q2" value="d"><span>すべてセキュリティグループへ保存</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+            <div data-fill data-id="rds-q3" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q3. S3の画像をRDSの検査行から参照する代表的な値は？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="S3キー|S3オブジェクトキー|オブジェクトキー|s3 key|object key" aria-label="S3画像を参照する値" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="availability" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：可用性と読み取り性能を分ける</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 Multi-AZは高可用性</h3>
+            <div class="ct-copy"><p>Multi-AZ DBインスタンス配置では、別のアベイラビリティーゾーン（AZ）に同期スタンバイを維持します。プライマリやAZに問題が起きると、RDSがフェイルオーバーします。</p><p>スタンバイは通常の読み取りクエリを受け付けません。そのため、Multi-AZは読み取りスケーリングではなく、高可用性と耐障害性のための構成です。</p></div>
+            <div class="ct-flow" aria-label="Multi-AZ構成"><div><small>AZ-A</small><strong>プライマリ</strong><p>アプリから読み書き</p></div><div><small>SYNC</small><strong>同期レプリケーション</strong><p>高可用性のためデータを反映</p></div><div><small>AZ-B</small><strong>スタンバイ</strong><p>障害時に昇格、通常は接続しない</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZSingleStandby.html" target="_blank" rel="noopener">Multi-AZ DBインスタンス</a></p>
+            <div data-quiz data-id="rds-q4" data-answer="a" data-explanation="Multi-AZの同期スタンバイは高可用性のために使います。通常の読み取り処理の分散先ではありません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q4. DBインスタンスまたはAZ障害から自動フェイルオーバーしたい。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="rds-q4" value="a"><span>Multi-AZ DBインスタンス配置</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q4" value="b"><span>S3 CORS</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q4" value="c"><span>CloudTrailログ整合性検証</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q4" value="d"><span>VPCフローログだけを有効化</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 リードレプリカは読み取りスケール</h3>
+            <div class="ct-copy"><p>リードレプリカはプライマリの読み取り専用コピーです。レポート、検索、集計などをレプリカへ振り分け、プライマリの負荷を下げます。更新はプライマリから非同期で複製されるため、反映遅延を前提にします。</p><p>Multi-AZのスタンバイとリードレプリカは役割が異なります。高可用性にはMulti-AZ、読み取り性能にはリードレプリカを選び、必要なら組み合わせます。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">構成</th><th scope="col">主目的</th><th scope="col">アプリから利用</th><th scope="col">複製</th></tr></thead><tbody><tr><th scope="row">Multi-AZスタンバイ</th><td>高可用性</td><td>通常は接続不可</td><td>同期</td></tr><tr><th scope="row">リードレプリカ</th><td>読み取り分散</td><td>読み取り専用で接続</td><td>非同期</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ReadRepl.html" target="_blank" rel="noopener">RDSリードレプリカ</a></p>
+            <div data-quiz data-id="rds-q5" data-answer="d" data-explanation="読み取り中心の検索・レポートを分散するにはリードレプリカを利用します。レプリケーション遅延は考慮が必要です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q5. 検索・分析クエリが増え、プライマリの読み取り負荷を下げたい。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="rds-q5" value="a"><span>バックアップ保持期間を0にする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q5" value="b"><span>セキュリティグループを全開放する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q5" value="c"><span>Multi-AZのスタンバイへ通常接続する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q5" value="d"><span>リードレプリカへ読み取りを振り分ける</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="recovery" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：守る・戻す・つなぐ</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 プライベート接続と暗号化</h3>
+            <div class="ct-copy"><p>本番RDSは通常、インターネットから直接到達できないプライベートサブネットへ配置します。DBのセキュリティグループでは、アプリケーションのセキュリティグループから必要なDBポートだけを許可します。</p><p>保存時はAWS KMSによる暗号化を選び、通信時はTLSを使用します。認証情報はコードやAMIへ埋め込まず、AWS Secrets Managerなどで管理・ローテーションします。</p></div>
+            <div data-quiz data-multiple data-id="rds-q6" data-answer="a,c" data-explanation="DBはプライベートに置き、アプリのセキュリティグループから必要ポートだけを許可するのが基本です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q6. 本番RDSのネットワーク設計で優先するものを2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="rds-q6" value="a"><span>プライベートサブネットへ配置</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="rds-q6" value="b"><span>0.0.0.0/0からDBポートを許可</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="rds-q6" value="c"><span>アプリのSGから必要ポートだけ許可</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="rds-q6" value="d"><span>パスワードをソースコードへ固定</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 自動バックアップとポイントインタイム復旧</h3>
+            <div class="ct-copy"><p>自動バックアップを有効にすると、指定した保持期間内の時点へポイントインタイムリカバリ（PITR）できます。手動スナップショットは明示的に削除するまで保持され、変更前の保全や長期保存に使えます。</p><p>復元は元のDBを巻き戻すのではなく、新しいDBインスタンスを作成します。接続先変更、整合性確認、アプリ再開まで含めた復元演習を定期的に行います。</p></div>
+            <div class="ct-flow" aria-label="RDS復旧手順"><div><small>01 SELECT</small><strong>復旧時点を選ぶ</strong><p>保持期間内の事故直前</p></div><div><small>02 RESTORE</small><strong>新しいDBを作成</strong><p>元DBはそのまま残る</p></div><div><small>03 VALIDATE</small><strong>検証して切り替える</strong><p>接続先とデータ整合性を確認</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_WorkingWithAutomatedBackups.html" target="_blank" rel="noopener">RDS自動バックアップ</a>、<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PIT.html" target="_blank" rel="noopener">ポイントインタイム復旧</a></p>
+            <div data-quiz data-id="rds-q7" data-answer="b" data-explanation="RDSのポイントインタイム復旧では、指定時点の状態を持つ新しいDBインスタンスが作成されます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q7. 誤更新の直前へPITRすると、基本的に何が起こる？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="rds-q7" value="a"><span>元DBがその場で巻き戻る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q7" value="b"><span>指定時点から新しいDBインスタンスを作成する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q7" value="c"><span>S3バケットが削除される</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q7" value="d"><span>すべてのリードレプリカが書き込み可能になる</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div id="operations" class="tb-card p-5 sm:p-7 scroll-mt-28">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.3 接続急増とRDS Proxy</h3>
+            <div class="ct-copy"><p>Lambdaや大量のアプリインスタンスが短時間に接続すると、DBの接続数・認証・TLSハンドシェイクが負荷になります。RDS Proxyは接続プールを維持し、多数のクライアント接続で少数のDB接続を再利用します。</p><p>接続急増を吸収し、フェイルオーバー時の接続回復も支援します。ただし遅いSQLやロックを解消するものではなく、トランザクション状態による接続ピン留めも確認します。</p></div>
+            <div data-rds-advisor class="rds-advisor mt-5">
+              <h4 class="font-bold text-sky-900">要件→RDS機能アドバイザー</h4><p class="text-sm text-slate-600 mt-2">要件を選び、最初に検討する機能と注意点を確認します。</p>
+              <label>現在の課題<select data-rds-scenario><option value="ha">AZ障害時も継続したい</option><option value="read">読み取り負荷を分散したい</option><option value="connections">Lambdaから接続が急増する</option><option value="recover">誤更新の直前へ戻したい</option><option value="storage">空き容量不足を防ぎたい</option></select></label>
+              <div class="rds-advisor-result"><small>推奨候補</small><strong data-rds-result>Multi-AZ</strong><p data-rds-detail>同期スタンバイと自動フェイルオーバーを利用します。読み取りスケール用途ではありません。</p></div>
+            </div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-proxy.html" target="_blank" rel="noopener">Amazon RDS Proxy</a></p>
+            <div data-quiz data-id="rds-q8" data-answer="c" data-explanation="RDS Proxyは接続をプール・再利用し、Lambdaなどからの接続急増がDBを圧迫するのを抑えます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q8. Lambdaの同時実行増加で短時間にDB接続が急増する。最初に検討するサービスは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="rds-q8" value="a"><span>S3 Transfer Acceleration</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q8" value="b"><span>VPCフローログ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q8" value="c"><span>Amazon RDS Proxy</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q8" value="d"><span>CloudTrailログ整合性検証</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.4 容量と性能を監視する</h3>
+            <div class="ct-copy"><p>CloudWatchではCPUUtilization、DatabaseConnections、FreeStorageSpace、ReadLatency、WriteLatencyなどを監視します。Database InsightsやPerformance InsightsではDB負荷、上位SQL、待機イベントを確認し、遅いSQL・ロック・I/Oを切り分けます。</p><p>ストレージオートスケーリングは空き容量が少ないときに上限まで自動拡張できますが、縮小はしません。大規模ロード時は拡張が間に合わない場合もあるため、アラームと容量計画を併用します。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/monitoring-cloudwatch.html" target="_blank" rel="noopener">RDSとCloudWatch</a>、<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PIOPS.Autoscaling.html" target="_blank" rel="noopener">ストレージオートスケーリング</a></p>
+            <div data-fill data-id="rds-q9" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q9. DBストレージの空き容量を監視する代表的なCloudWatchメトリクスは？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="FreeStorageSpace|free storage space" aria-label="空き容量メトリクス" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：医療画像サービスを設計する</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <div class="ct-copy"><p>要件は、海外クリニックから画像を高速にアップロードし、患者・検査情報を一貫して検索でき、AZ障害にも備えることです。画像本体はTransfer Accelerationを有効にしたS3へ、構造化メタデータはMulti-AZのRDSへ保存します。</p><p>アプリはRDSのS3キーを使って画像を特定し、必要な権限と期限を持つ署名付きURLを発行します。復旧要件に合う自動バックアップ保持期間を設定し、実際に復元できるかを訓練します。</p></div>
+          <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">要件</th><th scope="col">主な担当</th></tr></thead><tbody><tr><th scope="row">長距離画像アップロード</th><td>S3 Transfer Acceleration＋マルチパート</td></tr><tr><th scope="row">患者・検査・画像の関連</th><td>RDSのテーブル、主キー・外部キー・トランザクション</td></tr><tr><th scope="row">AZ障害への備え</th><td>RDS Multi-AZ</td></tr><tr><th scope="row">誤更新からの復旧</th><td>自動バックアップ＋PITR＋復元訓練</td></tr></tbody></table></div>
+          <div data-quiz data-id="rds-q10" data-answer="b" data-explanation="大容量画像はS3、関係性のあるメタデータはRDSへ分け、RDSはMulti-AZとバックアップで保護します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q10. 要件を満たす構成として最も適切なのは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="rds-q10" value="a"><span>すべての画像とメタデータをSingle-AZ RDSの1列へ保存</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q10" value="b"><span>画像はS3、メタデータはMulti-AZ RDS、復旧用に自動バックアップ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q10" value="c"><span>画像と患者情報をCloudTrailだけへ記録</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q10" value="d"><span>RDSを公開し、世界中から直接SQL接続</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          <div class="ct-note"><strong>覚え方：</strong>「画像そのもの」はS3。「行と列・関係・トランザクション」はRDS。「止まりにくく」はMulti-AZ。「読む量を増やす」はリードレプリカです。</div>
+        </div>
+      </section>
+
+      <section id="storage-performance" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">5</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">追加実務演習：ストレージI/Oのボトルネック</h2><span class="tb-badge is-prac">実務</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">5.1 IOPSとスループットを分けて測る</h3>
+            <div class="ct-copy"><p><strong>IOPS</strong>は1秒あたりのI/O操作回数、<strong>スループット</strong>は1秒あたりに転送するデータ量です。小さいランダムI/Oが多い処理はIOPS、大きな連続I/Oはスループットが先に上限へ達することがあります。「ストレージが遅い」だけでは、どちらを増やすべきか確定できません。</p><p>CloudWatchではReadIOPS・WriteIOPS、ReadThroughput・WriteThroughput、ReadLatency・WriteLatency、DiskQueueDepth、BurstBalanceを同じ時間帯で確認します。対応するインスタンスではEBSIOBalance%とEBSByteBalance%も参考になります。CPUUtilization、FreeableMemory、DatabaseConnections、上位SQLや待機イベントも並べ、別レイヤーの飽和を除外します。</p></div>
+            <div class="overflow-x-auto rounded-2xl ring-1 ring-sky-100 mt-4"><table class="w-full text-sm"><thead class="bg-sky-50 text-sky-800"><tr><th class="text-left p-3">観測</th><th class="text-left p-3">主な示唆</th></tr></thead><tbody class="text-slate-700 divide-y divide-sky-50"><tr><td class="p-3">IOPSが上限付近、待ち行列とレイテンシ増</td><td class="p-3">IOPS不足を疑う</td></tr><tr><td class="p-3">Read/WriteThroughputが上限付近</td><td class="p-3">MiB/sの帯域不足を疑う</td></tr><tr><td class="p-3">BurstBalanceが枯渇</td><td class="p-3">gp2のバースト依存を疑う</td></tr><tr><td class="p-3">CPUが飽和しI/Oは余裕</td><td class="p-3">DBクラスやSQLを調べる</td></tr><tr><td class="p-3">読み取りSQLだけが支配的</td><td class="p-3">キャッシュ・索引・リードレプリカも候補</td></tr></tbody></table></div>
+            <div class="ct-note"><strong>db.t3.mediumも無関係ではありません。</strong>DBインスタンスクラスにはEBS帯域の上限があり、プロビジョニングしたストレージ性能をクラス側が使い切れない場合があります。ストレージとインスタンスクラスの上限を両方確認します。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-metrics.html" target="_blank" rel="noopener">RDSのCloudWatchメトリクス</a>、<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Storage.html" target="_blank" rel="noopener">RDSストレージと性能上限</a></p>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">5.2 gp2・gp3・io1・io2を比較する</h3>
+            <div class="overflow-x-auto rounded-2xl ring-1 ring-sky-100"><table class="w-full text-sm"><thead class="bg-sky-50 text-sky-800"><tr><th class="text-left p-3">タイプ</th><th class="text-left p-3">性能の考え方</th><th class="text-left p-3">現在の位置づけ</th></tr></thead><tbody class="text-slate-700 divide-y divide-sky-50"><tr><td class="p-3 font-semibold">gp2</td><td class="p-3">容量に応じるベースラインIOPSとバーストクレジット</td><td class="p-3">前世代。小容量で持続負荷なら枯渇に注意</td></tr><tr><td class="p-3 font-semibold">gp3</td><td class="p-3">基本3,000 IOPS・125 MiB/s。容量と独立して追加性能を設定可能</td><td class="p-3">汎用SSDの推奨。費用対性能を比較</td></tr><tr><td class="p-3 font-semibold">io1</td><td class="p-3">必要なIOPSをプロビジョニングし、持続性能を得る</td><td class="p-3">前世代。今回の選択肢では正解</td></tr><tr><td class="p-3 font-semibold">io2 Block Express</td><td class="p-3">高IOPS・高スループット・低レイテンシと高耐久性</td><td class="p-3">I/O集約・レイテンシ重視でAWSが推奨</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>RDS for MySQLのio1／io2では、条件を満たせば最大256,000 IOPSを設定できます。ただし最大値はストレージ容量、IOPS対GiB比、DBインスタンスがNitroベースか、インスタンスクラスの帯域などに左右されます。「タイプを選べば必ず最大性能が出る」という意味ではありません。</p><p>gp3はIOPSとストレージスループットを追加プロビジョニングできるため、必要性能がgp3の範囲内ならio系より費用対効果が高い場合があります。持続的で高いIOPS、低レイテンシ、より高い耐久性が必要ならio2を検討します。</p></div>
+            <details class="tb-accordion mt-4"><summary>既存DBのストレージタイプ変更は無停止？</summary><div class="tb-accordion-body">ストレージタイプの変更では、処理開始時に短いダウンタイムが発生する場合があります。その後はDBを利用しながらstorage-optimizationが進みます。変更中は次のストレージ変更を行えない期間があるため、検証、バックアップ、保守時間、アプリの再接続を計画します。</div></details>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Storage.html" target="_blank" rel="noopener">gp3・io1・io2の比較</a>、<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ModifyInstance.Settings.html" target="_blank" rel="noopener">ストレージ変更の影響</a></p>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">5.3 設問の答えと、実環境での判断</h3>
+            <div class="ct-copy"><p>設問では、gp2を使用中で、原因がストレージI/O性能だと特定されています。提示された4つの選択肢のうち、ストレージ性能を直接プロビジョニングするio1への変更が正解です。</p><p>ただし実環境では、gp3へ移行して必要なIOPS／スループットを追加する案と、io2 Block Expressを必ず比較します。読み取りレプリカは読み取りI/Oを別インスタンスへ逃がせるため、読み取り中心なら効果があり得ますが、書き込み性能や元DBのストレージ上限を直接増やす手段ではありません。キャッシュやインデックスもI/O削減には有効ですが、測定した上限そのものを引き上げる変更ではありません。</p></div>
+            <div data-quiz data-id="rds-q11" data-answer="d" data-explanation="提示された選択肢では、ストレージ性能を直接引き上げられるio1への変更が最も直接的です。実務ではgp3や推奨世代のio2も比較します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q11. gp2のストレージ性能がボトルネックと特定された場合、選択肢内で最も直接的な対処は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="rds-q11" value="a"><span>db.m5.largeへ変更するだけ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q11" value="b"><span>キャッシュだけを増やす</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q11" value="c"><span>読み取りレプリカを作るだけ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q11" value="d"><span>プロビジョンドIOPS SSD（io1）へ変更する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+            <div class="ct-note mt-5"><strong>実務の判断順：</strong>①メトリクスでIOPS・MiB/s・レイテンシ・待ち行列を確認 ②SQL、キャッシュ、読み取り分散で需要を減らせるか評価 ③gp3追加性能またはio2を費用・遅延要件から選択 ④インスタンスクラスのEBS帯域も確認 ⑤変更後に同じピーク時間帯で再計測。</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="aurora-global-database" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">6</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">追加実務演習：Aurora Global DatabaseとリージョンDR</h2><span class="tb-badge is-prac">実務</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">6.1 RPO・RTOと障害の範囲を先に読む</h3>
+            <div class="ct-copy"><p><strong>RPO（目標復旧時点）</strong>は許容できるデータ損失の時間、<strong>RTO（目標復旧時間）</strong>はサービスを復旧させるまでの時間です。RPO 15秒は「障害発生直前から最大15秒分までのデータ損失を許容する」という意味で、15秒以内にサービスを再開するという意味ではありません。</p><p>設問がリージョン全体の障害を対象にするなら、同一リージョン内のAZだけに複製するMulti-AZ、Aurora Replica、Aurora Serverless v2では保護範囲が足りません。別リージョンへ継続的に複製するAurora Global Databaseが、提示された構成の中では正しいアーキテクチャです。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">構成</th><th scope="col">主目的</th><th scope="col">リージョン障害</th></tr></thead><tbody><tr><th scope="row">Aurora Replica／Multi-AZ</th><td>インスタンス・AZ障害への高可用性</td><td>同一リージョン内のため保護できない</td></tr><tr><th scope="row">Aurora Serverless v2</th><td>DBコンピューティング容量の自動スケーリング</td><td>単独では保護できない</td></tr><tr><th scope="row">Aurora Global Database</th><td>クロスリージョンの読み取り・DR</td><td>セカンダリリージョンへ切替可能</td></tr></tbody></table></div>
+            <div class="ct-note"><strong>レプリカラグは設定値ではありません。</strong>通信状況やワークロードによって変動する観測値です。「レプリカラグを15秒に固定する」という選択肢は成立しません。</div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">6.2 Global Databaseの構成と切替を理解する</h3>
+            <div class="ct-copy"><p>Aurora Global Databaseは、書き込みを受ける1つのプライマリリージョンと、最大10の読み取り専用セカンダリリージョンで構成できます。ストレージレイヤーの専用インフラで変更を複製し、クロスリージョンのレプリケーション遅延は通常1秒未満です。</p><p>計画メンテナンスなどで行う<strong>スイッチオーバー</strong>は、セカンダリを同期してから書き込み先を切り替えるためRPO 0を実現できます。一方、予期しないリージョン障害時の<strong>フェイルオーバー</strong>では、障害時点のクロスリージョンレプリケーションラグに応じてデータ損失が発生し得ます。「通常1秒未満」は実績上の代表値であり、最大値を無条件に保証するSLAではありません。</p></div>
+            <div class="ct-flow" aria-label="Aurora Global Databaseの構成"><div><small>PRIMARY REGION</small><strong>書き込みクラスター</strong><p>通常の読み書きを処理</p></div><div><small>STORAGE REPLICATION</small><strong>クロスリージョン複製</strong><p>通常は1秒未満、非同期</p></div><div><small>SECONDARY REGION</small><strong>読み取りクラスター</strong><p>障害時に書き込み先へ昇格</p></div></div>
+            <div class="ct-note"><strong>監視と訓練も構成の一部です。</strong><code>AuroraGlobalDBRPOLag</code>、<code>AuroraGlobalDBProgressLag</code>、<code>AuroraReplicaLag</code>を監視し、エンドポイント切替、アプリ再接続、DNSやシークレット、依存サービスを含むDR手順を定期的に試験します。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html" target="_blank" rel="noopener">Aurora Global Databaseの概要</a>、<a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database-disaster-recovery.html" target="_blank" rel="noopener">計画切替と障害復旧</a></p>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">6.3 「RPOを15秒に設定する」はそのまま実装できない</h3>
+            <div class="ct-copy"><p>Aurora PostgreSQLには、Global Databaseの目標RPOを上限として追跡するクラスターパラメータ <code>rds.global_db_rpo</code> があります。ただし公式仕様の有効範囲は<strong>20秒以上</strong>です。したがって、設問の「RPOを15秒に設定する」は、構成の方向性は正しくても、文面どおりには実装できません。</p><p>このパラメータを設定すると、すべてのセカンダリが設定RPOを超えた場合、少なくとも1つが追いつくまでプライマリのトランザクションコミットをブロックします。データ損失上限を優先する代わりに、書き込み可用性やレイテンシへ影響する可能性があるため、値だけでなくトレードオフを設計します。</p></div>
+            <div class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-7 text-amber-950"><strong>厳密なRPO 15秒が契約・規制上の必須条件なら、提示された選択肢に完全な正解はありません。</strong>Aurora Global DatabaseをDRの基盤として採用する判断は妥当ですが、「15秒を設定できる」と説明してはいけません。サービスで強制可能な最小値、実測ラグ、アラーム、復旧訓練、規制当局が求める証跡を確認し、要件と実装の不一致を設計レビューで解消します。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database-disaster-recovery.html" target="_blank" rel="noopener"><code>rds.global_db_rpo</code>の有効範囲と動作</a></p>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">6.4 選択肢を試験と実務の両方で評価する</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">選択肢</th><th scope="col">評価</th><th scope="col">理由</th></tr></thead><tbody><tr><th scope="row">別AZのAurora Replica</th><td>不正解</td><td>同一リージョン内。リージョン障害を保護できず、ラグも任意設定できない</td></tr><tr><th scope="row">Aurora Global Database＋RPO 15秒</th><td>構成は最適／記述は不正確</td><td>クロスリージョンDRは正しいが、設定可能なRPOは20秒以上</td></tr><tr><th scope="row">Serverless v2＋別AZレプリカ</th><td>不正解</td><td>自動容量調整とリージョンDRは別問題</td></tr><tr><th scope="row">Multi-AZ DBクラスター</th><td>不正解</td><td>AZ障害には強いが、すべて同一リージョン</td></tr></tbody></table></div>
+            <div class="ct-note"><strong>試験上の読み方：</strong>作問者の想定解はAurora Global Databaseです。ただし、資格学習でも実務でも「RPO 15秒を設定できる」という誤った仕様まで覚えないようにします。</div>
+            <div data-quiz data-multiple data-id="rds-q12" data-answer="a,d,e" data-explanation="Aurora Global DatabaseはクロスリージョンDRの構成です。障害時のRPOは実際の複製ラグに依存し、計画スイッチオーバーは同期後に切り替えるためRPO 0です。rds.global_db_rpoの最小値は20秒で、15秒には設定できません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q12. Aurora Global Databaseについて正しいものを3つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="rds-q12" value="a"><span>リージョン障害に備えるクロスリージョンDRに利用できる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="rds-q12" value="b"><span><code>rds.global_db_rpo</code>は15秒に設定できる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="rds-q12" value="c"><span>Multi-AZだけでリージョン全体の障害を保護できる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="rds-q12" value="d"><span>予期しない障害時のRPOはクロスリージョンの複製ラグに左右される</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="rds-q12" value="e"><span>正常時の計画スイッチオーバーはRPO 0で実行できる</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="aurora-backtrack" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">7</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">追加実務演習：Aurora MySQLをその場で巻き戻す</h2><span class="tb-badge is-prac">実務</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">7.1 復元先が「新規」か「既存」かで選ぶ</h3>
+            <div class="ct-copy"><p>Auroraの復旧方法を選ぶ最初の判別軸は、元のクラスターを残して<strong>新しいDBクラスター</strong>へ復元するのか、現在のクラスターを<strong>その場で巻き戻す</strong>のかです。ポイントインタイムリカバリ（PITR）、自動バックアップ、スナップショットからの復元は、新しいDBクラスターを作成します。</p><p>バックトラックは、バックアップから新規クラスターを作るのではなく、バックトラックを有効化済みのAurora MySQL DBクラスター全体を指定時点へ巻き戻します。同じクラスターを使う要件に適合しますが、変更を破棄する破壊的なインプレース操作です。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">方法</th><th scope="col">復元先</th><th scope="col">主な用途</th></tr></thead><tbody><tr><th scope="row">PITR</th><td>新しいDBクラスター</td><td>保持期間内の任意時点を別環境として復元</td></tr><tr><th scope="row">スナップショット／自動バックアップ復元</th><td>新しいDBクラスター</td><td>保存済み復旧点から再構築</td></tr><tr><th scope="row">Aurora MySQLバックトラック</th><td>既存DBクラスター</td><td>操作ミス前へクラスター全体を巻き戻す</td></tr><tr><th scope="row">Aurora Replicaの昇格</th><td>最新状態に近いレプリカ</td><td>読み取り分散・インスタンス障害時の可用性</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-pitr.html" target="_blank" rel="noopener">AuroraのPITR</a>、<a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-restore-snapshot.html" target="_blank" rel="noopener">スナップショットからの復元</a></p>
+            <div data-quiz data-id="rds-q13" data-answer="d" data-explanation="PITRとバックアップ復元は新しいDBクラスターを作成します。既存のAurora MySQLクラスター自体を過去へ戻す要件には、事前に有効化されたバックトラックを使います。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q13. 有効化済みAurora MySQLを、同じクラスターのまま3時間前へ戻す機能は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="rds-q13" value="a"><span>ポイントインタイムリカバリ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q13" value="b"><span>Aurora Replicaの昇格</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q13" value="c"><span>Lambdaから自動バックアップを既存クラスターへ上書き</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q13" value="d"><span>バックトラック</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">7.2 72時間、対象エンジン、停止影響を正確に理解する</h3>
+            <div class="ct-copy"><p>バックトラックはAurora MySQLの対応バージョン・対応リージョンで利用でき、Aurora PostgreSQLでは利用できません。ターゲットバックトラックウィンドウの上限は72時間です。クラスター作成時、またはスナップショットから新しいクラスターを復元するときに有効化する必要があり、無効で作成した既存クラスターへ後付けはできません。</p><p>設定したターゲットウィンドウは目標値です。書き込み量などにより<strong>実際のバックトラックウィンドウが短くなる</strong>場合があるため、対象時刻が実際の範囲内かを確認します。バックトラックは単一テーブルだけではなく、DBクラスター全体へ作用します。</p></div>
+            <div class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-7 text-amber-950"><strong>無停止ではありません。</strong>処理中はAuroraがデータベースを一時停止し、開いている接続を閉じ、未コミットの読み書きを破棄します。アプリケーションからの新しい要求を停止・一時保留し、再接続と整合性確認を計画します。</div>
+            <details class="tb-accordion mt-4"><summary>バックトラックはバックアップの代わりになる？</summary><div class="tb-accordion-body">なりません。バックトラックは短期間の操作ミスを素早く巻き戻す機能です。長期保持、クラスター消失、リージョン障害、監査用の独立した復旧点には、自動バックアップ、スナップショット、クロスリージョン保護を別途用意します。</div></details>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraMySQL.Managing.Backtrack.html" target="_blank" rel="noopener">Aurora MySQLのバックトラック</a>、<a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraMySQL.Managing.Backtrack.Configuring.html" target="_blank" rel="noopener">バックトラックの設定</a></p>
+            <div data-quiz data-multiple data-id="rds-q14" data-answer="a,c,e" data-explanation="バックトラックはAurora MySQLの既存クラスター全体を巻き戻し、上限は72時間です。処理中は接続が閉じられるためアプリケーション停止計画が必要で、Aurora PostgreSQLでは利用できません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q14. Auroraバックトラックについて正しいものを3つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="rds-q14" value="a"><span>Aurora MySQLの既存クラスター全体を巻き戻す</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="rds-q14" value="b"><span>Aurora PostgreSQLでも同じ機能を利用できる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="rds-q14" value="c"><span>バックトラックウィンドウの上限は72時間である</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="rds-q14" value="d"><span>処理中も接続と未コミットトランザクションは必ず維持される</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="rds-q14" value="e"><span>無効で作成した既存クラスターへ後から有効化できない</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">7.3 本番での安全な巻き戻し手順</h3>
+            <ol class="list-decimal pl-5 space-y-3 text-sm leading-7 text-slate-700 marker:font-bold marker:text-sky-600"><li>障害原因を止め、バッチやアプリケーションからの新規書き込みを停止します。</li><li>影響開始時刻をUTCで特定し、実際のバックトラック可能範囲に対象時刻が含まれることを確認します。</li><li>監査・比較・フォールバック用に現時点のスナップショットや必要な証跡を保全します。</li><li>対象時刻の直前へクラスター全体をバックトラックします。</li><li>クラスターの利用可能状態、データ整合性、重要な取引件数を検証します。</li><li>アプリケーション接続を段階的に戻し、失敗したバッチの再実行や後続データの再処理を管理します。</li></ol>
+            <div class="ct-note"><strong>時刻選定に注意：</strong>破損処理が複数トランザクションにまたがる場合、最初の不正変更より十分前を選びます。単一行や単一テーブルだけを戻したい場合は、PITRで新規クラスターを作り、比較・選択移行する方が安全なことがあります。</div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">7.4 提示された選択肢を判定する</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">選択肢</th><th scope="col">判定</th><th scope="col">理由</th></tr></thead><tbody><tr><th scope="row">PITR</th><td>不正解</td><td>目的時点へ戻せるが、新しいDBクラスターを作成する</td></tr><tr><th scope="row">Aurora Replicaを昇格</th><td>不正解</td><td>過去状態ではなく、プライマリに近い現在状態を引き継ぐ</td></tr><tr><th scope="row">Lambda＋自動バックアップ</th><td>不正解</td><td>復元は新規クラスターであり、独自コードでも既存へ直接上書きできない</td></tr><tr><th scope="row">バックトラック</th><td>正解</td><td>有効化済みの既存Aurora MySQLクラスターを指定時点へ巻き戻す</td></tr></tbody></table></div>
+            <div class="ct-note"><strong>判別語：</strong>「過去72時間以内」「Aurora MySQL」「現在のクラスターそのもの」の3点が、バックトラックを選ぶ強い手掛かりです。</div>
+          </div>
+        </div>
+      </section>
+      <section id="postgres-force-ssl" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">+</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">追加演習：RDS for PostgreSQLの接続暗号化</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <p class="ct-copy">すべてのクライアントにTLSを強制するには、カスタムDBパラメータグループで<code>rds.force_ssl=1</code>を設定します。PostgreSQL 15以降は既定値が1、14以前は0です。<code>rds.force_ssl</code>自体は動的パラメータですが、新しいカスタムパラメータグループを既存DBインスタンスへ初めて関連付ける操作では再起動が必要になる場合があります。</p>
+          <div class="ct-note mt-4"><strong>混同しない：</strong>KMSは保存時暗号化、セキュリティグループはL3/L4の到達制御です。どちらも非TLS接続をデータベースエンジンで拒否する設定ではありません。クライアント側ではCA証明書の検証も有効にします。</div>
+          <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/PostgreSQL.Concepts.General.SSL.html" target="_blank" rel="noopener">RDS for PostgreSQLでSSLを要求する</a></p>
+          <div data-quiz data-id="rds-q20" data-answer="a" data-explanation="rds.force_ssl=1により、非TLSの接続要求をPostgreSQL側で拒否します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q20. PostgreSQLへの全クライアント接続でTLSを強制する方法は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="rds-q20" value="a"><span>カスタムパラメータグループでrds.force_ssl=1</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q20" value="b"><span>KMS暗号化だけを有効化</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="rds-q20" value="c"><span>セキュリティグループだけを変更</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+        </div>
+      </section>
+    </article>
+
+    <section class="mt-12"><h2 class="text-xl font-bold text-sky-950 mb-4">次のステップ</h2><div class="tb-card p-5 sm:p-6"><ul class="space-y-3 text-sm text-slate-700"><li><a class="text-sky-700 underline" href="aws-backup.html">AWS Backup</a>：28日PITR、クロスリージョンDR、EC2・EFSを含む一元保護を理解する。</li><li><a class="text-sky-700 underline" href="s3.html">Amazon S3</a>：画像本体、署名付きURL、Transfer Accelerationを理解する。</li><li><a class="text-sky-700 underline" href="lambda.html">AWS Lambda</a>：イベント処理とRDS Proxyの接続設計を理解する。</li><li><a class="text-sky-700 underline" href="iam.html">IAM</a>：Secrets ManagerやRDS操作の最小権限を設計する。</li><li><a class="text-sky-700 underline" href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraMySQL.Managing.Backtrack.html" target="_blank" rel="noopener">AWS公式：Aurora MySQLバックトラック</a></li><li><a class="text-sky-700 underline" href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html" target="_blank" rel="noopener">AWS公式：Aurora Global Database</a></li><li><a class="text-sky-700 underline" href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database-disaster-recovery.html" target="_blank" rel="noopener">AWS公式：Global DatabaseのDRとRPO</a></li></ul></div></section>
+    <div class="mt-10 text-center"><a href="../../../index.html" class="inline-block rounded-full bg-white text-sky-700 ring-1 ring-sky-200 px-6 py-3 text-sm font-semibold shadow-sm">← 通常版の教材一覧へ</a></div>
+  </main>
+  <footer class="text-center text-xs text-slate-400 pb-10">Engineer Textbook · Amazon RDS · 公式資料確認：2026-10-30</footer>
+  <script src="../../../assets/shared.js?v=20261030-5"></script>
+</body>
+</html>

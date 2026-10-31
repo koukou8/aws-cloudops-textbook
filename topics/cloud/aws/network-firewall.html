@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ja" data-topic-id="cloud-aws-network-firewall">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="AWS Network FirewallによるDPI、ステートフルルール、AZ別エンドポイント、対称ルーティング、TLS検査を学ぶ通常版教材。">
+  <title>AWS Network Firewall | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css?v=20261030-1">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"AWS Network Firewall"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">通常版 · 約55分</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">AWS Network Firewall</h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">ヘッダーだけでなく通信の中身まで検査するDPIを、VPCの通信経路へ安全に挿入する方法を学びます。ファイアウォールの作成、ルール、AZごとのエンドポイント、往復ルートは一組です。</p>
+
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">今回の設問の結論</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">AWS Network FirewallをVPCに構成し、ステートフルルールでインバウンド通信をDPIします。</p>
+          <p class="ct-copy mt-2">ただし、ファイアウォールを作成しただけでVPC内の全通信が自動的に検査されるわけではありません。各AZの専用ファイアウォールサブネットにエンドポイントを置き、IGWとNLBの間を通る往復通信が同じAZのエンドポイントを通るようルートテーブルを構成します。</p>
+          <div class="ct-note mt-4"><strong>暗号化通信の注意：</strong>HTTPS/TLSのアプリケーション本文まで検査するには、ACMの証明書を使ったTLS inspection configurationで復号・検査・再暗号化を構成します。復号しない場合、暗号化された本文そのものは読めません。</div>
+          <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/network-firewall/latest/developerguide/how-it-works.html" target="_blank" rel="noopener">Network Firewallの仕組み</a>、<a href="https://docs.aws.amazon.com/network-firewall/latest/developerguide/tls-inspection-configurations.html" target="_blank" rel="noopener">TLS検査</a></p>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500">
+            <li>DPI、ステートレス検査、ステートフル検査を区別する。</li>
+            <li>Firewall、Firewall Policy、Rule Group、Endpointの役割を説明する。</li>
+            <li>IGW → Network Firewall → NLB → EC2の経路をAZごとに設計する。</li>
+            <li>GuardDuty、Traffic Mirroring、AWS WAFとの違いを判断する。</li>
+            <li>TLS、ログ、段階導入まで含めた実務チェックを行う。</li>
+          </ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">DPIと構成要素</a><a href="#routing" class="underline underline-offset-4">ルーティング</a><a href="#rules" class="underline underline-offset-4">ルールとTLS</a><a href="#operations" class="underline underline-offset-4">比較と運用</a><a href="#case" class="underline underline-offset-4">総合演習</a></nav>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-6"><div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div><div class="tb-progress"><div data-progress-bar style="width:0%"></div></div><p class="mt-2 text-xs text-slate-500">9問の正解状況を、このブラウザに保存します。</p></div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編：DPIと構成要素</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 DPIは通信のペイロードまで見る</h3>
+            <div class="ct-copy"><p>セキュリティグループやネットワークACLは、主にIPアドレス、ポート、プロトコルなどを条件に通信を制御します。DPI（Deep Packet Inspection）はフローの状態とアプリケーションプロトコルを追跡し、復号可能な通信ではペイロードに含まれる攻撃シグネチャや不正なコマンド列まで評価します。</p><p>AWS Network FirewallはVPC向けのマネージド型ネットワークファイアウォール／IDS・IPSです。ステートフルエンジンにはSuricata互換ルールを使用でき、AWS管理ルールグループと独自ルールを組み合わせられます。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">検査</th><th scope="col">見る単位</th><th scope="col">代表的な判断</th></tr></thead><tbody><tr><th scope="row">ステートレス</th><td>個々のパケット</td><td>送信元／宛先、ポート、プロトコル</td></tr><tr><th scope="row">ステートフル</th><td>往復のフロー</td><td>接続状態、アプリケーションプロトコル</td></tr><tr><th scope="row">DPI</th><td>再構成したフローと内容</td><td>シグネチャ、不審なペイロード</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/network-firewall/latest/developerguide/how-it-works.html" target="_blank" rel="noopener">How AWS Network Firewall works</a></p>
+            <div data-quiz data-id="network-firewall-q1" data-answer="c" data-explanation="DPIはパケットのヘッダー情報だけでなく、フローを再構成してペイロードやアプリケーションプロトコルを評価します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q1. DPIの特徴として最も適切なものは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q1" value="a"><span>送信元IPだけを記録する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q1" value="b"><span>DNS名をIPアドレスへ変換する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q1" value="c"><span>フローとペイロードを解析して攻撃パターンを判定する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q1" value="d"><span>EC2のOSをマルウェアスキャンする</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 4つの部品を分けて考える</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">部品</th><th scope="col">役割</th></tr></thead><tbody><tr><th scope="row">Firewall</th><td>保護対象VPCと利用するAZ／サブネットを定義</td></tr><tr><th scope="row">Firewall Policy</th><td>ステートレス・ステートフルルールと既定動作を束ねる</td></tr><tr><th scope="row">Rule Group</th><td>一致条件とpass／alert／drop／reject等の動作を定義</td></tr><tr><th scope="row">Firewall Endpoint</th><td>各AZの専用サブネットに置かれるルートの次ホップ</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>ファイアウォールエンドポイントを置くサブネットはNetwork Firewall専用にします。そのサブネット自身へ出入りする通信は検査対象にできないため、NLBやEC2など他のリソースを同居させません。</p><p>「VPCレベルのサービス」とは、一貫したポリシーをVPCへ適用できるという意味です。全通信を暗黙に横取りするという意味ではなく、検査したい通信をルートテーブルでエンドポイントへ送る必要があります。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/network-firewall/latest/developerguide/" target="_blank" rel="noopener">Network Firewallのリソースと概念</a>、<a href="https://docs.aws.amazon.com/network-firewall/latest/developerguide/firewalls.html" target="_blank" rel="noopener">Firewalls and firewall endpoints</a></p>
+            <div data-fill data-id="network-firewall-q2" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q2. ルールグループを束ね、ファイアウォールへ関連付ける設定は？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="Firewall Policy|ファイアウォールポリシー|firewall policy" aria-label="ルールグループを束ねる設定" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="routing" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">設計編：IGW・NLB間へ検査経路を挿入する</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 インバウンドの正しい並び</h3>
+            <div class="ct-flow" aria-label="インターネットからEC2までの検査経路"><div><small>EDGE</small><strong>Internet Gateway</strong><p>Edge route table</p></div><div><small>INSPECTION</small><strong>Firewall endpoint</strong><p>同じAZの専用サブネット</p></div><div><small>FRONTEND</small><strong>Internet-facing NLB</strong><p>アプリ入口</p></div><div><small>TARGET</small><strong>Private EC2</strong><p>複数AZのターゲット</p></div></div>
+            <div class="ct-copy mt-4"><p>IGWに関連付けるエッジルートテーブルで、NLB側サブネットのCIDR宛て通信を同じAZのファイアウォールエンドポイントへ送ります。ファイアウォールサブネットのルート表は検査後の通信をNLB側へ転送します。戻り通信も同じエンドポイントを経由してIGWへ戻します。</p><p>Network Firewall自体のためにNLBを置くわけではありません。NLBはアプリケーションの負荷分散、Network Firewallは経路上の検査という別の役割です。</p></div>
+            <div class="ct-note"><strong>段階導入：</strong>ルート変更は通信断を起こし得ます。各エンドポイントがREADYであること、ルールが想定どおりであること、戻り経路があることを検証してからAZ単位で切り替えます。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/network-firewall/latest/developerguide/getting-started.html" target="_blank" rel="noopener">Getting started—route table update</a></p>
+            <div data-quiz data-id="network-firewall-q3" data-answer="b" data-explanation="IGWとNLBの間へAZローカルのファイアウォールエンドポイントを挿入し、検査後にNLBへ転送します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q3. インバウンドDPIの経路として適切なのは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q3" value="a"><span>IGW → NLB → Network Firewall → EC2</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q3" value="b"><span>IGW → Network Firewall endpoint → NLB → EC2</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q3" value="c"><span>IGW → GuardDuty → NLB → EC2</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q3" value="d"><span>IGW → NAT Gateway → NLB → EC2</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 AZローカルかつ対称なルーティング</h3>
+            <div class="ct-copy"><p>Network Firewallは非対称ルーティングをサポートしません。要求と応答が同じファイアウォールエンドポイントを通らないと、状態テーブルが片方向しか認識できず、ステートフル検査やアプリケーション層の判定が正しく働きません。</p><p>2つのAZを使うなら、各AZに専用ファイアウォールサブネットとエンドポイントを1つずつ作り、AZ-Aのフローは往復ともAZ-A、AZ-Bのフローは往復ともAZ-Bを通す設計が基本です。NLBのクロスゾーン負荷分散を有効にする場合は、バックエンド向け経路も含めて非対称にならないか確認します。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">確認点</th><th scope="col">合格条件</th></tr></thead><tbody><tr><th scope="row">配置</th><td>利用する各AZに専用エンドポイントサブネット</td></tr><tr><th scope="row">往路</th><td>IGWからAZローカルのendpointへ</td></tr><tr><th scope="row">復路</th><td>同じendpointを通ってIGWへ</td></tr><tr><th scope="row">観測</th><td>flow_idで要求・応答の両ログを確認</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/network-firewall/latest/developerguide/asymmetric-routing.html" target="_blank" rel="noopener">Avoiding asymmetric routing</a></p>
+            <div data-quiz data-id="network-firewall-q4" data-answer="d" data-explanation="ステートフル検査では要求と応答を同じファイアウォールエンドポイントへ通し、フロー状態を一貫して追跡させます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q4. ステートフル検査で最重要のルーティング条件は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q4" value="a"><span>往路だけを最短経路にする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q4" value="b"><span>応答はNAT Gatewayへ送る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q4" value="c"><span>要求と応答を別AZへ分散する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q4" value="d"><span>要求と応答を同じendpointへ通す</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="rules" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：ルールとTLS検査</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 ステートレスで選別し、ステートフルで深く見る</h3>
+            <div class="ct-copy"><p>ステートレスルールは個々のパケットを高速に評価します。DPIを行うフローは、ステートレスの既定動作またはルールからステートフルエンジンへ転送します。ステートフルルールではAWS管理ルールグループまたはSuricata互換ルールを使い、攻撃パターンに対してalert、drop、rejectなどの動作を定義できます。</p><p>本番導入では最初から大量にdropせず、まずalertで誤検知と業務影響を確認し、例外を整備してから段階的に遮断へ移すと安全です。ルール評価順序は、既定のaction orderかstrict orderのどちらを使うかをポリシー全体で統一します。</p></div>
+            <div class="ct-flow" aria-label="ルール評価の流れ"><div><small>PACKET</small><strong>Stateless rules</strong><p>粗い分類</p></div><div><small>FLOW</small><strong>Stateful engine</strong><p>状態とプロトコル</p></div><div><small>ACTION</small><strong>Alert / Drop</strong><p>記録または遮断</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/network-firewall/latest/developerguide/firewall-policies.html" target="_blank" rel="noopener">Firewall policies</a></p>
+            <div data-quiz data-id="network-firewall-q5" data-answer="a" data-explanation="まずalertで検知状況と誤検知を確認し、例外を調整してからdropへ移行すると安全です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q5. 新しい攻撃シグネチャを本番へ安全に導入する順序は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q5" value="a"><span>alertで観測 → 誤検知調整 → dropへ移行</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q5" value="b"><span>全トラフィックを即座にdrop</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q5" value="c"><span>ログを無効にしてdrop</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q5" value="d"><span>セキュリティグループを全開放して検査</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 HTTPSの本文を見るにはTLS検査が必要</h3>
+            <div class="ct-copy"><p>TLSで暗号化された通信は、通常のステートフル検査だけではアプリケーション本文をそのまま読めません。Network FirewallのTLS inspection configurationを使うと、対象フローを復号し、ステートフルルールで検査してから再暗号化できます。</p><p>インバウンドTLS検査では対象ドメインのサーバー証明書をACMで発行またはインポートし、検査対象のIP、ポート、プロトコル範囲を定義します。証明書の更新、対応TLS機能、プライバシー・法令、追加料金、レイテンシを事前に評価します。</p></div>
+            <div class="ct-note"><strong>NLBとの関係：</strong>NLBでTLSを終端するか、TCPでバックエンドへ透過するかにより、Network Firewallを通る時点の通信が暗号化済みかどうかが変わります。「DPIを導入した＝HTTPS本文を自動で読める」とは限りません。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/network-firewall/latest/developerguide/tls-inspection-configurations.html" target="_blank" rel="noopener">TLS inspection configurations</a>、<a href="https://docs.aws.amazon.com/network-firewall/latest/developerguide/tls-inspection-certificate-requirements.html" target="_blank" rel="noopener">証明書要件</a></p>
+            <div data-quiz data-id="network-firewall-q6" data-answer="c" data-explanation="暗号化されたHTTPS本文を検査するには、ACM証明書とTLS inspection configurationを使って復号・検査・再暗号化します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q6. HTTPSのペイロードへシグネチャ検査を行うために必要なのは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q6" value="a"><span>VPC Flow Logsだけを有効化</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q6" value="b"><span>NACLで443番を許可</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q6" value="c"><span>ACM証明書とTLS inspection configuration</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q6" value="d"><span>GuardDutyの検出器</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="operations" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：他サービスとの違いと運用</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.1 似たサービスを目的で選ぶ</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">サービス</th><th scope="col">方式</th><th scope="col">インライン遮断</th><th scope="col">今回</th></tr></thead><tbody><tr><th scope="row">Network Firewall</th><td>経路上でステートフル検査／DPI</td><td>できる</td><td>最適</td></tr><tr><th scope="row">GuardDuty</th><td>CloudTrail、VPCフロー、DNS等を分析してFinding生成</td><td>しない</td><td>補完</td></tr><tr><th scope="row">Traffic Mirroring</th><td>対応ENIの通信コピーを分析装置へ送る</td><td>それ自体はしない</td><td>観測用途</td></tr><tr><th scope="row">AWS WAF</th><td>対応するHTTP(S)入口でWebリクエストを検査</td><td>できる</td><td>NLBは直接の対象外</td></tr><tr><th scope="row">SG / NACL</th><td>IP、ポート、プロトコル中心</td><td>できる</td><td>DPIではない</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>GuardDutyは脅威検出サービスとして重要ですが、通信経路へ入るプロキシではなく、ペイロードをインラインで遮断する製品ではありません。Traffic Mirroringはパケットのコピーを外部の監視装置へ送るため、フォレンジックや独自IDSには有効ですが、本番パスをその場で止めません。</p><p>Traffic MirroringではNetwork Load Balancerをミラーターゲットとして利用できますが、ミラーソースは対応するENIです。「NLBのインバウンド側へ設定すればDPI製品になる」という理解は誤りです。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_data-sources.html" target="_blank" rel="noopener">GuardDutyの基礎データソース</a>、<a href="https://docs.aws.amazon.com/vpc/latest/mirroring/what-is-traffic-mirroring.html" target="_blank" rel="noopener">Traffic Mirroringとは</a></p>
+            <div data-quiz data-id="network-firewall-q7" data-answer="b" data-explanation="GuardDutyはログやイベント等を分析してFindingを生成する脅威検出サービスで、通信経路上のDPI・遮断装置ではありません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q7. GuardDutyが今回のDPI要件を単独で満たせない理由は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q7" value="a"><span>VPCに対応していないから</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q7" value="b"><span>ログ等を分析する検出サービスで、インラインDPIではないから</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q7" value="c"><span>CloudTrailを利用できないから</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q7" value="d"><span>マルチアカウントに対応していないから</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+            <div data-quiz data-id="network-firewall-q8" data-answer="a" data-explanation="Traffic Mirroringは通信コピーを分析先へ送るアウトオブバンド方式であり、それ自体は本番通信をインライン遮断しません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q8. Traffic Mirroringの説明として正しいものは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q8" value="a"><span>通信コピーを分析先へ送り、分析機能は別途用意する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q8" value="b"><span>コピー元の通信を自動的に遮断する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q8" value="c"><span>SuricataルールをNLBへ直接設定する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q8" value="d"><span>CloudTrailイベントだけを複製する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.2 導入と監視のチェックリスト</h3>
+            <ol class="ct-steps"><li><strong>専用サブネットを各AZに用意</strong><p>NLBやEC2を同居させず、必要なIPアドレスを確保します。</p></li><li><strong>ルールグループとポリシーを作成</strong><p>既定動作、評価順序、管理ルール、独自Suricataルールを定義します。</p></li><li><strong>Firewallとendpointを作成</strong><p>各endpointがREADYになるまでルートを切り替えません。</p></li><li><strong>往復ルートを段階的に変更</strong><p>IGW edge route tableとNLB側の戻り経路をAZ単位で検証します。</p></li><li><strong>ログとメトリクスを有効化</strong><p>Flow、Alert、必要に応じてTLSログをCloudWatch Logs、S3、Firehoseへ送り、drop増加やendpoint状態を監視します。</p></li><li><strong>テストして遮断へ移行</strong><p>alertで正常通信と誤検知を確認し、Reachability Analyzerやflow_idで対称性を確認します。</p></li></ol>
+            <div class="ct-note"><strong>可用性だけでなく料金もAZ単位：</strong>エンドポイント時間料金、処理データ量、TLS高度検査、AZ間転送を見積もります。AZをまたぐ迂回は対称性・障害範囲・コストを悪化させます。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/network-firewall/latest/developerguide/logging-cw-logs.html" target="_blank" rel="noopener">Network Firewall logging</a>、<a href="https://docs.aws.amazon.com/network-firewall/latest/developerguide/troubleshooting-general-issues.html" target="_blank" rel="noopener">Troubleshooting</a></p>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">5</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：NLBへのインバウンドDPI</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <h3 class="text-lg font-bold text-sky-900 mb-3">設問を要件へ分解する</h3>
+          <div class="ct-copy"><p>インターネットからIGW、NLBを経由して、2つのプライベートサブネットにあるEC2へ届く通信を対象とします。必要なのは「ペイロード検査」「既知シグネチャ」「通信経路上でのリアルタイム検査」です。</p></div>
+          <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">選択肢</th><th scope="col">判定</th><th scope="col">理由</th></tr></thead><tbody><tr><th scope="row">GuardDuty</th><td>不正解</td><td>Findingを作る検出サービスで、インラインDPIではない</td></tr><tr><th scope="row">各プライベートサブネットに個別FW</th><td>不正解</td><td>専用endpointサブネットを各AZに置き、一つのポリシーと経路で保護する</td></tr><tr><th scope="row">VPCのNetwork Firewall＋stateful rules</th><td>正解</td><td>DPIとインライン遮断を提供。検査経路のルート設定も必要</td></tr><tr><th scope="row">NLBでTraffic Mirroring</th><td>不正解</td><td>コピー送信のみで、単独では分析・インライン遮断をしない</td></tr></tbody></table></div>
+          <div class="ct-note"><strong>正解文の読み替え：</strong>「VPC全体に構成」は、全通信へ自動適用という意味ではありません。VPCのFirewall／Policyを作り、各AZの専用endpointを経由するルートへ変更した通信が検査対象です。</div>
+          <div data-quiz data-id="network-firewall-q9" data-answer="c" data-explanation="Network FirewallをVPCに構成し、各AZの専用endpointへ往復通信をルーティングして、ステートフルルールでDPIします。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q9. この要件を満たす最適なソリューションは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q9" value="a"><span>GuardDutyを有効化する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q9" value="b"><span>各プライベートサブネット内に個別のNetwork Firewallを置く</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q9" value="c"><span>VPCにNetwork Firewallを構成し、stateful rulesと検査経路を設定する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="network-firewall-q9" value="d"><span>NLBのインバウンド通信をTraffic Mirroringするだけ</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+        </div>
+      </section>
+
+      <section class="tb-card p-5 sm:p-7">
+        <h2 class="text-xl font-bold text-sky-950">覚えておく3行</h2>
+        <ul class="mt-4 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500"><li>Network FirewallはDPI可能だが、検査対象はendpointへルーティングした通信だけ。</li><li>各AZの専用サブネットと、要求・応答が同じendpointを通る対称ルーティングが必要。</li><li>HTTPS本文の検査にはTLS inspection configurationとACM証明書が必要。</li></ul>
+        <p class="ct-source mt-5">公式仕様確認日：2026-10-30</p>
+      </section>
+    </article>
+  </main>
+  <script src="../../../assets/shared.js?v=20261030-1"></script>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ja" data-topic-id="cloud-aws-alb-nlb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="ALBとNLBの違いを基礎から実務まで学ぶ通常版教材。L4/L7、パスルーティング、TLS終端、固定IP、ヘルスチェックを図解と10問の演習で確認できます。">
+  <title>ALB / NLBの使い分け | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"ALB / NLB"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">通常版 · 約35分</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">ALB / NLB<span class="block sm:inline">の使い分け</span></h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">どちらもアクセスを複数のサーバーへ分散するロードバランサー。違いは「何を見て、どこへ振り分けるか」です。</p>
+        <div class="grid sm:grid-cols-2 gap-4 mt-7">
+          <div class="tb-card p-5 sm:p-6"><p class="text-sm font-semibold text-sky-600">ALB · Application Load Balancer</p><h2 class="mt-2 text-xl font-bold text-sky-950">HTTPの内容を見て振り分ける</h2><p class="ct-copy mt-2">URLのパス、ホスト名などに応じて転送先を変える、Webアプリの案内係です。</p></div>
+          <div class="tb-card p-5 sm:p-6"><p class="text-sm font-semibold text-sky-600">NLB · Network Load Balancer</p><h2 class="mt-2 text-xl font-bold text-sky-950">TCP / UDPなどの通信を分散する</h2><p class="ct-copy mt-2">HTTPのパスを読まずに通信を転送します。独自プロトコルや固定IPの要件が選択の手掛かりです。</p></div>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700"><li>L4 / L7、リスナー、ターゲットグループの役割を説明する。</li><li>URL、TCP / UDP、TLS、固定IPの要件から構成を選ぶ。</li><li>複数AZへの配置、ヘルスチェック、権限・通信制御を確認する。</li></ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">基礎</a><a href="#routing" class="underline underline-offset-4">振り分けデモ</a><a href="#tls" class="underline underline-offset-4">TLS</a><a href="#operations" class="underline underline-offset-4">実務</a><a href="#case" class="underline underline-offset-4">総合演習</a></nav>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-6"><div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div><div class="tb-progress"><div data-progress-bar style="width:0%"></div></div><p class="mt-2 text-xs text-slate-500">10問の正解状況を、このブラウザに保存します。</p></div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編：ロードバランサーの役割</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 アクセスの入口をまとめ、処理を分散する</h3>
+            <div class="ct-copy"><p>ロードバランサー（Load Balancer）は、利用者からのアクセスを受け、複数の処理先へ分散します。AWSではElastic Load Balancing（ELB）というサービス群が提供し、ALBとNLBはその種類です。「ELBという別製品とALBを並べて選ぶ」という関係ではありません。</p><p>処理先はターゲットと呼び、EC2インスタンスなどを登録します。通常はヘルスチェックに合格したターゲットへ転送します。サーバー1台に直接アクセスを集中させる構成に比べ、負荷分散と可用性の向上を図れます。</p></div>
+            <div class="ct-flow" aria-label="ロードバランサーによる負荷分散"><div><small>01 利用者</small><strong>共通のDNS名に接続</strong><p>どのサーバーが動いているかを個別に管理しない</p></div><div><small>02 ELB</small><strong>ALB または NLB</strong><p>接続を受け、ルールや通信情報から転送先を選ぶ</p></div><div><small>03 ターゲット</small><strong>複数AZのサーバー</strong><p>登録先の状態を確認しながら処理を分散する</p></div></div>
+            <div class="ct-note"><strong>負荷分散と台数の増減は別です。</strong>ロードバランサーを作っただけでEC2の台数が増えるわけではありません。必要に応じてEC2 Auto Scalingなどと組み合わせます。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html" target="_blank" rel="noopener">ALBの概要と関連サービス</a></p>
+            <div data-quiz data-id="lb-q1" data-answer="b" data-explanation="ALBとNLBはいずれもElastic Load Balancingのロードバランサーの種類です。EC2の台数管理とは役割が異なります。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q1. ELB、ALB、NLBの関係として正しいものは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="lb-q1" value="a"><span>ELB、ALB、NLBはすべて別サービスで、同じ役割を持たない</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q1" value="b"><span>ELBのロードバランサーの種類としてALBやNLBがある</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q1" value="c"><span>NLBはEC2の台数を必ず2倍にする機能</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q1" value="d"><span>ALBを使うとヘルスチェックは不要になる</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 ALBはL7、NLBはL4</h3>
+            <div class="ct-copy"><p>L7はOSI参照モデルのアプリケーション層です。ALBはHTTPリクエストを扱い、「/apiへの要求はAPIサーバー、/imagesへの要求は画像サーバー」のように振り分けます。ホスト名やHTTPヘッダーなども判断に使えます。</p><p>L4はトランスポート層です。NLBはTCP接続やUDPフローなどを分散します。HTTP以外の通信にも対応できますが、URLのパスを解釈して処理先を変えるものではありません。NLBでもHTTP/HTTPSの通信自体は運べます。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">比較点</th><th scope="col">ALB</th><th scope="col">NLB</th></tr></thead><tbody><tr><th scope="row">主な判断の層</th><td>L7：HTTPリクエスト</td><td>L4：接続・フロー</td></tr><tr><th scope="row">リスナーのプロトコル</th><td>HTTP / HTTPS</td><td>TCP / TLS / UDPなど</td></tr><tr><th scope="row">パス・ホスト名による転送</th><td>対応</td><td>HTTPの内容による転送には非対応</td></tr><tr><th scope="row">固定IPの直接割り当て</th><td>非対応。通常はDNS名で利用</td><td>有効なAZごとに固定IP</td></tr><tr><th scope="row">AWS WAFの直接関連付け</th><td>対応</td><td>非対応</td></tr><tr><th scope="row">TLS終端</th><td>HTTPSリスナーで対応</td><td>TLSリスナーで対応</td></tr></tbody></table></div>
+            <details class="tb-accordion mt-4"><summary>補足：NLBが対応するプロトコル</summary><div class="tb-accordion-body">現行の公式資料ではTCP、TLS、UDP、TCP_UDPに加え、QUIC、TCP_QUICも記載されています。ここでは最初に覚える軸として、HTTPの内容を見るALBと、TCP/UDP等を扱うNLBを比較します。</div></details>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html" target="_blank" rel="noopener">ALBリスナー</a>、<a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/network/load-balancer-listeners.html" target="_blank" rel="noopener">NLBリスナー</a>、<a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/network/introduction.html" target="_blank" rel="noopener">NLBの固定IP</a></p>
+            <div data-quiz data-id="lb-q2" data-answer="c" data-explanation="独自UDPプロトコルにはNLBを選べます。ALBのリスナーはHTTP/HTTPSで、任意のUDPサービスの入口にはなりません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q2. UDPを使う独自のゲーム通信を分散したい。選ぶのは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="lb-q2" value="a"><span>ALBのHTTPリスナー</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q2" value="b"><span>ALBのHTTPSリスナー</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q2" value="c"><span>NLBのUDPリスナー</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q2" value="d"><span>CloudTrailのイベント履歴</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.3 リスナー・ルール・ターゲットグループ</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">用語</th><th scope="col">役割</th><th scope="col">ALBの例</th></tr></thead><tbody><tr><th scope="row">リスナー</th><td>プロトコルとポートを指定した入口</td><td>HTTPS : 443</td></tr><tr><th scope="row">ルール</th><td>条件と実行する処理</td><td>/api/*ならapi-tgへ転送</td></tr><tr><th scope="row">ターゲットグループ</th><td>転送先をまとめた単位</td><td>api-tgにAPIサーバーを登録</td></tr><tr><th scope="row">ターゲット</th><td>実際に処理する登録先</td><td>EC2、IPアドレスなど</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>入口のポートと、サーバー側のポートは同じでなくても構いません。たとえばALBがHTTPSの443番で受け、ターゲットのHTTPの8080番へ転送する構成があります。この場合、443番で接続できるかと、8080番へ転送できるかは別々に確認します。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html" target="_blank" rel="noopener">ALBのコンポーネント</a></p>
+            <div data-fill data-id="lb-q3" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q3. 転送先のサーバーをまとめて登録する単位は？</p><label class="text-sm text-slate-700">答え（日本語または英語） <span class="tb-fill"><input data-answer="ターゲットグループ|target group|targetgroup" aria-label="転送先をまとめる単位" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="advanced" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：ルール・暗号化・固定IP</h2></div>
+        <div class="space-y-8">
+          <div id="routing" class="tb-card p-5 sm:p-7 scroll-mt-28">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 URLを変えたら、転送先はどう変わる？</h3>
+            <div class="ct-copy"><p>ALBのルールには優先順位があります。小さい数値のルールから評価し、条件に一致した処理を行います。どれにも一致しない場合はデフォルトルールを使います。たとえば優先度10の/api/*、20の/images/*、最後に通常のWeb画面、という設定です。</p></div>
+            <div data-lb-sim class="lb-sim mt-5">
+              <h4 class="font-bold text-sky-900">振り分けの比較デモ</h4><p class="text-sm text-slate-600 mt-2">同じHTTPS要求でも、ALBはパスを読み、NLBのTCPリスナーは暗号化された通信をそのまま転送します。</p>
+              <div class="lb-sim-fields"><label>ロードバランサー<select data-lb-mode><option value="alb">ALB：HTTPS 443</option><option value="nlb">NLB：TCP 443（TLSパススルー）</option></select></label><label>要求するパス<select data-lb-path><option value="api">/api/orders</option><option value="images">/images/logo.png</option><option value="web">/about</option></select></label></div>
+              <div class="ct-flow" aria-label="選択した構成の転送経路" aria-live="polite"><div><small>01 入口</small><strong data-lb-ingress>ALB · HTTPS : 443</strong></div><div><small>02 判定</small><strong data-lb-rule>優先度10 · /api/*</strong></div><div><small>03 転送先</small><strong data-lb-target>api-tg</strong></div></div>
+              <p data-lb-note class="lb-sim-note" role="status">ALBがHTTPSを復号し、パスに一致するAPI用グループへ転送します。</p>
+              <p class="text-xs text-slate-500 mt-3">学習用の簡略モデルです。NLB側は1つの転送先グループを設定した例で、ターゲットの選択アルゴリズムや障害時の動きは再現していません。</p>
+            </div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-rules.html" target="_blank" rel="noopener">ALBのリスナールール</a></p>
+            <div data-quiz data-id="lb-q4" data-answer="a" data-explanation="パス条件を解釈して別のターゲットグループへ転送するのはALBの役割です。NLBのTCPリスナーはHTTPのパスを判定しません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q4. /apiと/imagesを別のサービスへ送り分けたい。適切なのは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="lb-q4" value="a"><span>ALBにパス条件のルールと転送先グループを設定する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q4" value="b"><span>NLBのTCPリスナーにURLを登録する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q4" value="c"><span>同じポートでは振り分けられないためIPを必ず分ける</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q4" value="d"><span>CloudWatchにパスを保存するだけで転送される</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+          <div id="tls" class="tb-card p-5 sm:p-7 scroll-mt-28">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 TLS終端とパススルーは別の構成</h3>
+            <div class="ct-copy"><p>TLSは通信を暗号化する仕組みです。「TLS終端」は、その暗号化された接続をロードバランサーなどでいったん終えることです。ALBはHTTPSリスナー、NLBはTLSリスナーで終端できます。証明書はAWS Certificate Manager（ACM）などで用意します。</p><p>一方、NLBにTCPの443番リスナーを設定すると、TLSを復号せずバックエンドへ渡せます。これがTLSパススルーです。この場合、証明書と復号処理はバックエンドが担当します。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">構成</th><th scope="col">復号する場所</th><th scope="col">見分けるポイント</th></tr></thead><tbody><tr><th scope="row">ALB · HTTPS</th><td>ALB</td><td>HTTPの内容を判定できる</td></tr><tr><th scope="row">NLB · TLS</th><td>NLB</td><td>TLSは終端するが、HTTPのパスルーティングはしない</td></tr><tr><th scope="row">NLB · TCP 443</th><td>バックエンド</td><td>暗号化された通信をそのまま渡す</td></tr></tbody></table></div>
+            <div class="ct-note"><strong>「HTTPSだからALB」と即断しない。</strong>NLBでもHTTPSの通信を運べます。また、ALBでTLS終端してもバックエンドへの区間が自動的にHTTPSになるわけではありません。転送先グループのプロトコルも確認します。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html" target="_blank" rel="noopener">ALBのHTTPSリスナー</a>、<a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/network/load-balancer-listeners.html" target="_blank" rel="noopener">NLBのTLS終端とTCPパススルー</a></p>
+            <div data-quiz data-id="lb-q5" data-answer="d" data-explanation="NLBのTCP 443リスナーはTLSを復号せず転送できます。TLSリスナーを選ぶとNLBで終端するため、要件と異なります。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q5. TLSをロードバランサーで復号せず、EC2で終端したい。選ぶ構成は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="lb-q5" value="a"><span>ALBのHTTPSリスナー</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q5" value="b"><span>NLBのTLSリスナー</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q5" value="c"><span>ALBのHTTPリスナーに証明書を付ける</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q5" value="d"><span>NLBのTCP 443リスナー</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.3 固定IPとL7機能が両方必要なら</h3>
+            <div class="ct-copy"><p>NLBは、有効化したアベイラビリティーゾーン（AZ）ごとに固定IPを持ちます。インターネット向けNLBでは、有効なサブネットごとにElastic IPを関連付けられます。「取引先のファイアウォールに接続先IPを許可登録する」といった要件が判断材料です。</p><p>ALBには固定IPを直接割り当てられません。固定IPとALBのパスルーティングを両立したい場合は、NLBのターゲットとしてALBを登録する構成が選択肢です。NLBの入口とALBのL7機能を組み合わせられますが、2つ分の構成管理や費用が必要になります。</p></div>
+            <div class="ct-flow" aria-label="NLBとALBを組み合わせる例"><div><small>01 固定の入口</small><strong>NLB · TCP 443</strong><p>AZごとの固定IPを利用</p></div><div><small>02 Webの判断</small><strong>ALB · HTTPS 443</strong><p>ここでTLS終端し、パスやホスト名を評価</p></div><div><small>03 サービス</small><strong>API / Webのグループ</strong><p>各グループ内のサーバーへ分散</p></div></div>
+            <details class="tb-accordion mt-4"><summary>補足：NLB→ALBの前提とPrivateLink</summary><div class="tb-accordion-body">この構成ではNLBとALBを同じAWSアカウント・同じVPCに配置し、ターゲットタイプalbのグループを使います。グループのプロトコルはTCPで、ポートはALBのリスナーに合わせます。PrivateLinkのエンドポイントサービスとALBのL7機能を組み合わせる用途にも使えます。</div></details>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/network/introduction.html" target="_blank" rel="noopener">NLBの固定IP</a>、<a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/network/application-load-balancer-target.html" target="_blank" rel="noopener">NLBの転送先としてALBを利用</a></p>
+            <div data-fill data-id="lb-q6" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q6. 固定IPの入口とALBのパスルーティングを組み合わせる構成は？</p><label class="text-sm text-slate-700"><span class="tb-fill"><input data-answer="NLB|nlb|Network Load Balancer" aria-label="ALBの前段のロードバランサー" placeholder="???"></span> → ALB → サーバー群</label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="operations" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：安定して転送するために</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 複数AZと公開範囲を設計する</h3>
+            <div class="ct-copy"><p>ALBだから公開用、NLBだから社内用、という区別ではありません。どちらにもインターネット向けと内部向けの構成があります。誰が入口に到達する必要があるかで選びます。</p><p>可用性のためには、ロードバランサーだけでなく、実際の処理先も複数AZに分散させます。入口が冗長でも、唯一の処理先が停止すれば業務を継続できません。ALBの通常のAZ構成では2つ以上のAZを選びます。NLBは1つのAZから作れますが、複数AZでの構成を検討します。</p></div>
+            <div class="ct-note"><strong>固定IPは「必ず1個」ではありません。</strong>NLBでは有効なAZごとに入口のIPがあるため、許可リストにも必要なIPを反映します。通常の接続先としてはDNS名を利用し、単一AZのIPだけに依存しない設計を考えます。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/userguide/how-elastic-load-balancing-works.html" target="_blank" rel="noopener">ELBの仕組みとAZ</a>、<a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/network/introduction.html" target="_blank" rel="noopener">NLBのAZごとの動作</a></p>
+            <div data-quiz data-id="lb-q7" data-answer="b" data-explanation="ロードバランサーと処理先の両方を複数AZへ配置します。入口だけを冗長化しても、処理先が1台ならそこが単一障害点になります。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q7. AZ障害への耐性を高める設計は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="lb-q7" value="a"><span>ロードバランサーだけ複数AZにし、EC2は常に1台に固定する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q7" value="b"><span>入口と処理先を複数AZに配置し、正常性も確認する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q7" value="c"><span>NLBの単一AZのIPだけを全利用者へ固定配布する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q7" value="d"><span>ヘルスチェックを無効にする</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 ヘルスチェックは「実際に使えるか」を測る</h3>
+            <div class="ct-copy"><p>ヘルスチェックのプロトコル、ポート、パス、成功とみなす応答を確認します。Webアプリなら、ヘルスチェック用のパスが認証を要求したり、想定外のリダイレクトを返したりすると、不健康と判定される原因になります。</p><p>NLBのアクティブヘルスチェックではTCP、HTTP、HTTPSを使います。UDPのサービスでも、UDPそのものでチェックするのではなく、別の対応するチェックを設定します。単にTCPポートが開いているだけでなく、必要ならUDPアプリの状態を反映する確認口を用意します。</p></div>
+            <details class="tb-accordion mt-4"><summary>注意：「全台unhealthyなら必ず転送しない」ではない</summary><div class="tb-accordion-body">ALBやNLBには、すべてのターゲットが不健康な場合などに、正常性にかかわらず転送を試みるfail-openの動作があります。ヘルスチェックをアクセス制御の代用にせず、障害の検出・通知と復旧を設計します。</div></details>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html" target="_blank" rel="noopener">ALBのヘルスチェック</a>、<a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/network/target-group-health-checks.html" target="_blank" rel="noopener">NLBのヘルスチェック</a></p>
+            <div data-quiz data-id="lb-q8" data-answer="c" data-explanation="NLBのUDPサービスも、TCP・HTTP・HTTPSによるアクティブヘルスチェックを使います。アプリの実際の状態を反映する確認口を設計します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q8. NLBでUDPサービスの正常性を確認する方法は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="lb-q8" value="a"><span>UDPのヘルスチェックだけが選べる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q8" value="b"><span>UDPサービスでは正常性を確認できない</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q8" value="c"><span>TCP・HTTP・HTTPSで、サービスの状態が分かるチェックを設計する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q8" value="d"><span>CloudTrailのログ数だけでhealthyにする</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.3 通信経路とセキュリティグループを確認する</h3>
+            <div class="ct-copy"><p>「利用者→ロードバランサー」と「ロードバランサー→ターゲット」の両区間を確認します。リスナーの設定だけでなく、ターゲットの待受ポート、セキュリティグループ（SG）、ネットワークACL、ルートも関係します。ヘルスチェックのポートが別なら、その通信も許可します。</p><p>NLBにもSGを関連付けられます。ただし、SGなしで作成したNLBに、後から初めてSGを付けることはできません。作成時にSGを付けておけば、その後に関連付けを変更できます。「NLBはSG非対応」という古い説明に注意してください。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">症状</th><th scope="col">まず調べる場所</th></tr></thead><tbody><tr><th scope="row">入口へ接続できない</th><td>DNS、公開範囲、リスナー、SG・NACL、経路</td></tr><tr><th scope="row">ターゲットがunhealthy</th><td>チェック用ポート・パス、応答、SG、アプリの待受</td></tr><tr><th scope="row">別サービスへ転送される</th><td>ALBの条件、優先順位、デフォルトルール</td></tr><tr><th scope="row">APIの遅延が大きい</th><td>LBとアプリ双方のメトリクス、処理時間、容量</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/network/load-balancer-security-groups.html" target="_blank" rel="noopener">NLBのSGとヘルスチェック通信</a></p>
+            <div data-quiz data-multiple data-id="lb-q9" data-answer="a,d" data-explanation="NLBはSGに対応します。作成時に関連付ける点と、ヘルスチェックを含む転送経路を許可する点が重要です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q9. 正しい説明を2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="lb-q9" value="a"><span>NLBにもSGを関連付けられる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="lb-q9" value="b"><span>SGなしで作ったNLBにも、いつでも初めてのSGを追加できる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="lb-q9" value="c"><span>リスナーがあれば、ターゲットの待受ポートは確認不要</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="lb-q9" value="d"><span>ヘルスチェックの通信も許可されるよう確認する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：要件から構成を選ぶ</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <p class="ct-copy">ある企業のWebサービスでは、取引先が接続先の固定IPを許可リストへ登録します。また、<code>/api/*</code>と<code>/images/*</code>を異なるEC2群に転送する必要があります。Webのルール判断をマネージドなALBに任せるには、どの構成が候補になりますか？</p>
+          <div data-quiz data-id="lb-q10" data-answer="b" data-explanation="NLBでAZごとの固定IPの入口を提供し、転送先のALBでパスに応じてグループを選びます。同一VPC・同一アカウントなど、ALBターゲットの条件も満たします。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q10. 固定IPとパスルーティングを両立する構成は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="lb-q10" value="a"><span>ALB単体にElastic IPを直接割り当てる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q10" value="b"><span>NLB → ALB → パスごとのターゲットグループ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q10" value="c"><span>NLB単体でHTTPのパスを判定する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lb-q10" value="d"><span>SGのルールに/api/*を登録する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          <div class="ct-note mt-5"><strong>試験での判断順：</strong>①HTTPのパス・ホスト名・WAFならALB ②独自TCP/UDP・固定IP・PrivateLinkの入口ならNLB ③両方必要なら組み合わせを検討。速い・新しいという印象ではなく、要件から選びます。</div>
+          <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/network/application-load-balancer-target.html" target="_blank" rel="noopener">ALBをNLBのターゲットにする構成</a></p>
+        </div>
+      </section>
+      <section id="sessions-health" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">+</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">追加演習：セッション維持とヘルスチェック</h2></div>
+        <div class="space-y-5">
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">CloudFront → ALB → Stateful EC2</h3><p class="ct-copy mt-3">CloudFrontのキャッシュ／オリジンリクエストポリシーでセッションクッキーをALBへ転送し、ALBのターゲットグループ属性でスティッキーセッションを有効にします。設定単位はリスナールールではなくターゲットグループです。長期的にはセッションをElastiCacheやDBへ外部化し、インスタンス障害やスケールインでも状態を失わない設計が堅牢です。</p></div>
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">ALBでターゲットがUnhealthy</h3><p class="ct-copy mt-3">最初にターゲットグループのHealthCheckProtocol／Port／Path／成功コードと、アプリが実際にその宛先で応答しているかを確認します。次にALBのセキュリティグループからターゲットへの許可、NACL、待受アドレス、起動時間を切り分けます。</p></div>
+        </div>
+        <div class="ct-note"><strong>NLBの固定IP要件：</strong>毎秒数百万のL4接続とAZごとの固定IPが必要ならNLBを選び、インターネット向けではサブネットごとにElastic IPを関連付けられます。</div>
+        <div data-quiz data-multiple data-id="lb-q20" data-answer="a,d" data-explanation="CloudFrontでセッションクッキーを転送し、ALBターゲットグループでstickinessを有効にします。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q20. Statefulアプリのランダムなログアウトを抑える対策を2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="lb-q20" value="a"><span>CloudFrontでセッションクッキーを転送</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="lb-q20" value="b"><span>クロスゾーン負荷分散だけを変更</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="lb-q20" value="c"><span>リスナールールでstickinessを設定</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="lb-q20" value="d"><span>ターゲットグループでstickinessを有効化</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+      </section>
+    </article>
+    <section class="mt-12"><h2 class="text-xl font-bold text-sky-950 mb-4">次のステップ</h2><div class="tb-card p-5 sm:p-6"><ul class="space-y-3 text-sm text-slate-700"><li><a class="text-sky-700 underline" href="vpc-flow-logs.html">VPCフローログ</a>：ALB / NLBへ届く通信の許可・拒否を調べる。</li><li><a class="text-sky-700 underline" href="cloudtrail.html">CloudTrail</a>：誰がリスナーやSGを変更したかを追う。</li><li><a class="text-sky-700 underline" href="service-quotas.html">リソース上限</a>：増設前にアカウント・リージョンの使用量を確認する。</li><li><a class="text-sky-700 underline" href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html" target="_blank" rel="noopener">AWS公式：ALB</a> / <a class="text-sky-700 underline" href="https://docs.aws.amazon.com/elasticloadbalancing/latest/network/introduction.html" target="_blank" rel="noopener">AWS公式：NLB</a></li></ul></div></section>
+    <div class="mt-10 text-center"><a href="../../../index.html" class="inline-block rounded-full bg-white text-sky-700 ring-1 ring-sky-200 px-6 py-3 text-sm font-semibold">← 通常版の教材一覧へ</a></div>
+  </main>
+  <footer class="text-center text-xs text-slate-400 pb-10">Engineer Textbook · AWS ALB / NLB · 公式資料確認：2026-10-29</footer>
+  <script src="../../../assets/shared.js?v=20261029-8"></script>
+</body>
+</html>

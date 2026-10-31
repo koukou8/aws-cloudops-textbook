@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ja" data-topic-id="cloud-aws-service-quotas">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="AWS Service QuotasとVPC関連リソースの上限を、適用範囲、主要な既定値、CloudFormation失敗時の調査、引き上げ申請まで学ぶインタラクティブ教材です。">
+<title>AWS Service QuotasとVPC上限 | Engineer Textbook</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="../../../assets/shared.css">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 tracking-tight whitespace-nowrap"><span aria-hidden="true">📘</span> Engineer Textbook</a>
+      <span class="mx-1 text-slate-300">/</span>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"Service QuotasとVPC上限"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <a href="../../../quick/index.html#service-quotas" style="display:inline-block;margin-bottom:20px;padding:8px 14px;background:#fff;border:1px solid #dce4ec;border-radius:6px;color:#1763c2;font-size:13px;text-decoration:none">← このテーマを約2〜3分で復習する</a>
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap items-center gap-2 mb-4">
+          <span class="tb-badge">AWSガバナンス</span>
+          <span class="tb-badge is-basic">基礎</span>
+          <span class="tb-badge is-applied">応用</span>
+          <span class="tb-badge is-prac">実務</span>
+        </div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">AWS Service QuotasとVPC上限</h1>
+        <p class="mt-3 text-sky-800/80 text-base sm:text-lg max-w-3xl">「同じCloudFormationテンプレートなのに、なぜ今回は失敗した？」を起点に、AWSリソース上限の読み方・確認・予防を身につけます。</p>
+
+        <div class="tb-card mt-8 p-5 sm:p-7">
+          <div class="flex items-center gap-2 mb-3"><span aria-hidden="true">🎯</span><span class="font-semibold text-sky-900">この教材で学べること</span></div>
+          <ul class="space-y-2 text-[15px] text-slate-700 marker:text-sky-500 list-disc pl-5">
+            <li>クォータの適用範囲を、アカウント・リージョン・AZ・VPC・リソース単位で区別できます。</li>
+            <li>VPC、サブネット、NAT Gateway、Elastic IP、ルート、SG、NACLなどの主要な既定値を把握できます。</li>
+            <li>CloudFormation失敗時に原因を切り分け、引き上げ申請や設計変更へつなげられます。</li>
+          </ul>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-6">
+          <div class="flex items-center justify-between mb-2"><span class="font-semibold text-sky-900 text-sm">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sky-700 font-semibold text-sm">0%</span><button data-progress-reset class="text-xs text-slate-500 hover:text-sky-700 hover:underline">リセット</button></div></div>
+          <div class="tb-progress"><div data-progress-bar style="width:0%"></div></div>
+          <p class="mt-2 text-xs text-slate-500">設問への回答状況をこのブラウザに自動保存します。</p>
+        </div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section>
+        <div class="flex items-center gap-3 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編</h2><span class="tb-badge is-basic">基礎</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 画像の設問は、なぜVPCクォータなのか</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">各アプリが同一AWSアカウント・同一リージョンに新しいVPCを作る構成です。Amazon VPCの既定クォータは<strong class="text-sky-900">1アカウント・1リージョンあたり5 VPC</strong>。既存のデプロイで5個使っていれば、6個目のVPC作成は失敗します。</p>
+            <div class="mt-5 grid sm:grid-cols-[1fr_auto_1fr_auto_1fr] gap-3 items-center" aria-label="CloudFormationからVPCクォータ判定までの流れ">
+              <div class="rounded-2xl bg-sky-50 p-4 text-center"><div class="text-xs font-semibold text-sky-600">REQUEST</div><div class="font-bold text-sky-900 mt-1">CloudFormation</div><p class="text-xs text-slate-500 mt-1">VPCを作成</p></div>
+              <div class="text-center text-sky-400 font-bold" aria-hidden="true">→</div>
+              <div class="rounded-2xl bg-sky-50 p-4 text-center"><div class="text-xs font-semibold text-sky-600">SERVICE</div><div class="font-bold text-sky-900 mt-1">Amazon VPC</div><p class="text-xs text-slate-500 mt-1">現在数を確認</p></div>
+              <div class="text-center text-red-400 font-bold" aria-hidden="true">→ ✕</div>
+              <div class="rounded-2xl bg-red-50 p-4 text-center"><div class="text-xs font-semibold text-red-600">QUOTA</div><div class="font-bold text-red-900 mt-1">5 / 5</div><p class="text-xs text-red-700 mt-1">作成不可</p></div>
+            </div>
+            <div class="mt-5 rounded-2xl bg-blue-50 p-4 text-sm text-slate-700 leading-relaxed"><strong class="text-sky-900">重要：</strong>CloudFormationは作成を取りまとめるサービスです。テンプレートが同じでも、作成先の残容量は毎回変わります。今回の主因はテンプレートの版やAMIではなく、背後のAmazon VPCが適用するクォータです。</div>
+
+            <div data-quiz data-id="sq-q-screenshot" data-answer="c" data-explanation="同一アカウント・同一リージョンでVPCを増やし続けると、既定の5 VPCに到達します。適用クォータが引き上げ済みなら、その値が上限です。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q1. スクリーンショットの状況で、最も考えやすい原因は？</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq1" value="a"><span>CloudFormationテンプレートには有効期限がある</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq1" value="b"><span>同じテンプレートは一度しか実行できない</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq1" value="c"><span>そのアカウント・リージョンのVPCクォータに達した</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq1" value="d"><span>すべてのAMIはリージョン間で自動共有される</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 「アカウント上限」だけではない：スコープを読む</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">AWSのクォータには適用範囲があります。「何個まで？」だけでなく、<strong class="text-sky-900">どこで数えるか</strong>を必ずセットで確認します。</p>
+            <div class="mt-5 overflow-x-auto">
+              <table class="w-full text-sm min-w-[720px]">
+                <thead class="text-sky-700 bg-sky-50"><tr><th class="text-left p-3 rounded-l-xl">スコープ</th><th class="text-left p-3">例</th><th class="text-left p-3 rounded-r-xl">読み方</th></tr></thead>
+                <tbody class="text-slate-700 divide-y divide-sky-100">
+                  <tr><td class="p-3 font-semibold">アカウント × リージョン</td><td class="p-3">VPC、Elastic IP、セキュリティグループ</td><td class="p-3">東京と大阪は別カウント</td></tr>
+                  <tr><td class="p-3 font-semibold">アカウント × AZ</td><td class="p-3">NAT Gateway</td><td class="p-3">同じリージョンでもAZごと</td></tr>
+                  <tr><td class="p-3 font-semibold">VPC単位</td><td class="p-3">サブネット、ルートテーブル、NACL</td><td class="p-3">VPCごとに数える</td></tr>
+                  <tr><td class="p-3 font-semibold">リソース単位</td><td class="p-3">SGルール、ルート数</td><td class="p-3">SGやルートテーブルごと</td></tr>
+                  <tr><td class="p-3 font-semibold">グローバル</td><td class="p-3">一部のIAM等</td><td class="p-3">リージョンをまたいで共通</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div data-fill data-id="sq-q-scope" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <p class="leading-relaxed text-slate-700">VPC数のクォータは、AWSアカウントごと、かつ <span class="tb-fill"><input data-answer="リージョン|region" aria-label="VPCクォータの地理的な適用範囲" placeholder="???"></span> ごとに適用されます。</p>
+              <button data-fill-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.3 既定値・適用値・引き上げ可否</h3>
+            <div class="grid md:grid-cols-3 gap-4 mt-4">
+              <div class="rounded-2xl bg-sky-50 p-5"><div class="text-xs font-semibold text-sky-600">DEFAULT</div><div class="font-bold text-sky-900 mt-1">AWSの既定クォータ</div><p class="text-sm text-slate-700 mt-2">新しいアカウント・リージョンでの標準的な初期値。</p></div>
+              <div class="rounded-2xl bg-sky-50 p-5"><div class="text-xs font-semibold text-sky-600">APPLIED</div><div class="font-bold text-sky-900 mt-1">適用クォータ</div><p class="text-sm text-slate-700 mt-2">そのアカウント・リージョンに現在適用中の値。引き上げ後は既定値と異なります。</p></div>
+              <div class="rounded-2xl bg-sky-50 p-5"><div class="text-xs font-semibold text-sky-600">ADJUSTABLE</div><div class="font-bold text-sky-900 mt-1">調整可能か</div><p class="text-sm text-slate-700 mt-2">申請できるクォータと固定クォータがあります。申請が必ず承認されるとは限りません。</p></div>
+            </div>
+            <div class="mt-5 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 leading-relaxed"><strong>運用上の正解：</strong>ドキュメントの既定値ではなく、対象アカウント・対象リージョンのService Quotas画面またはAPIで「適用クォータ」を確認します。</div>
+
+            <div data-quiz data-id="sq-q-terms" data-answer="a,c,d" data-multiple data-explanation="既定値と適用値は異なる場合があります。固定クォータは申請対象ではなく、設計変更やリソース整理が必要です。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q2. 正しい説明をすべて選んでください。</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="checkbox" name="sqq2" value="a"><span>既定クォータと適用クォータは異なることがある</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="sqq2" value="b"><span>すべてのクォータは自動的に無制限まで引き上げられる</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="sqq2" value="c"><span>クォータのスコープとリージョンを確認する必要がある</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="sqq2" value="d"><span>固定クォータに当たった場合は設計変更も選択肢になる</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center gap-3 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：VPC関連の主要クォータ</h2><span class="tb-badge is-applied">応用</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 VPC・サブネット・CIDR・ルート</h3>
+            <p class="text-sm text-slate-600 leading-relaxed">以下はAWS公式ドキュメントの標準的な既定値です。実環境では必ず適用クォータを確認してください。</p>
+            <div class="mt-5 overflow-x-auto">
+              <table class="w-full text-sm min-w-[780px]">
+                <thead class="text-sky-700 bg-sky-50"><tr><th class="text-left p-3 rounded-l-xl">リソース</th><th class="text-left p-3">スコープ</th><th class="text-left p-3">既定値</th><th class="text-left p-3 rounded-r-xl">調整</th></tr></thead>
+                <tbody class="text-slate-700 divide-y divide-sky-100">
+                  <tr><td class="p-3 font-semibold">VPC</td><td class="p-3">リージョン</td><td class="p-3">5</td><td class="p-3">可能</td></tr>
+                  <tr><td class="p-3 font-semibold">サブネット</td><td class="p-3">VPC</td><td class="p-3">200</td><td class="p-3">可能</td></tr>
+                  <tr><td class="p-3 font-semibold">IPv4 CIDRブロック</td><td class="p-3">VPC</td><td class="p-3">5</td><td class="p-3">最大50まで</td></tr>
+                  <tr><td class="p-3 font-semibold">IPv6 CIDRブロック</td><td class="p-3">VPC</td><td class="p-3">5</td><td class="p-3">最大50まで</td></tr>
+                  <tr><td class="p-3 font-semibold">ルートテーブル</td><td class="p-3">VPC</td><td class="p-3">200</td><td class="p-3">可能</td></tr>
+                  <tr><td class="p-3 font-semibold">非伝播ルート</td><td class="p-3">ルートテーブル</td><td class="p-3">500（IPv4/IPv6別）</td><td class="p-3">最大1,000</td></tr>
+                  <tr><td class="p-3 font-semibold">伝播ルート</td><td class="p-3">ルートテーブル</td><td class="p-3">100</td><td class="p-3">固定</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <details class="tb-accordion mt-4"><summary>VPCクォータを上げると何が連動する？</summary><div class="tb-accordion-body">リージョンあたりのVPCクォータを上げると、リージョンあたりのInternet Gatewayクォータも同じ値まで連動して増えます。ただし、1つのVPCへ同時にアタッチできるInternet Gatewayは1つです。</div></details>
+
+            <div data-quiz data-id="sq-q-network-core" data-answer="b" data-explanation="サブネット数はVPC単位です。VPC Aが200個に達しても、別VPCのサブネット数とは別に数えます。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q3. 「サブネット 200」の数え方は？</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq3" value="a"><span>AWS Organizations全体</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq3" value="b"><span>VPCごと</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq3" value="c"><span>AZごと</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq3" value="d"><span>CloudFormationスタックごと</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 Gateway・IP・ENI</h3>
+            <div class="mt-5 overflow-x-auto">
+              <table class="w-full text-sm min-w-[780px]">
+                <thead class="text-sky-700 bg-sky-50"><tr><th class="text-left p-3 rounded-l-xl">リソース</th><th class="text-left p-3">スコープ</th><th class="text-left p-3">既定値</th><th class="text-left p-3 rounded-r-xl">注意点</th></tr></thead>
+                <tbody class="text-slate-700 divide-y divide-sky-100">
+                  <tr><td class="p-3 font-semibold">Internet Gateway</td><td class="p-3">リージョン</td><td class="p-3">5</td><td class="p-3">VPCクォータと連動。1 VPCに1つ</td></tr>
+                  <tr><td class="p-3 font-semibold">NAT Gateway</td><td class="p-3">AZ</td><td class="p-3">5</td><td class="p-3">調整可能</td></tr>
+                  <tr><td class="p-3 font-semibold">Elastic IP</td><td class="p-3">リージョン</td><td class="p-3">5</td><td class="p-3">調整可能</td></tr>
+                  <tr><td class="p-3 font-semibold">Public NAT GatewayあたりEIP</td><td class="p-3">NAT Gateway</td><td class="p-3">2</td><td class="p-3">最大8</td></tr>
+                  <tr><td class="p-3 font-semibold">ENI</td><td class="p-3">リージョン</td><td class="p-3">5,000</td><td class="p-3">調整可能。EC2以外のサービスも消費</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="mt-5 grid md:grid-cols-2 gap-4">
+              <div class="rounded-2xl bg-amber-50 p-4 text-sm text-amber-950"><strong>NAT GatewayはAZ単位：</strong>3 AZに4台ずつなら各AZは4/5で、リージョン合計12台でも既定範囲内です。</div>
+              <div class="rounded-2xl bg-amber-50 p-4 text-sm text-amber-950"><strong>ENIは見えにくい：</strong>ロードバランサー、RDS、LambdaのVPC接続など、マネージドサービスもネットワークインターフェイスを作ります。</div>
+            </div>
+            <div data-quiz data-id="sq-q-gateways" data-answer="a,c,d" data-multiple data-explanation="NAT GatewayはAZ単位、Elastic IPはリージョン単位、ENIは多くのサービスが消費します。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q4. 正しい説明をすべて選んでください。</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="checkbox" name="sqq4" value="a"><span>NAT Gatewayの既定クォータはAZごとに数える</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="sqq4" value="b"><span>Elastic IPは無制限に作成できる</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="sqq4" value="c"><span>ENIはEC2インスタンス以外のサービスも消費する</span></label></li>
+                <li><label class="tb-quiz-option"><input type="checkbox" name="sqq4" value="d"><span>Internet Gatewayは同時に1 VPCへ1つだけアタッチできる</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.3 セキュリティグループとNACL</h3>
+            <div class="mt-5 overflow-x-auto">
+              <table class="w-full text-sm min-w-[780px]">
+                <thead class="text-sky-700 bg-sky-50"><tr><th class="text-left p-3 rounded-l-xl">リソース</th><th class="text-left p-3">スコープ</th><th class="text-left p-3">既定値</th><th class="text-left p-3 rounded-r-xl">上限・制約</th></tr></thead>
+                <tbody class="text-slate-700 divide-y divide-sky-100">
+                  <tr><td class="p-3 font-semibold">セキュリティグループ</td><td class="p-3">リージョン</td><td class="p-3">2,500</td><td class="p-3">調整可能</td></tr>
+                  <tr><td class="p-3 font-semibold">SGルール</td><td class="p-3">SG</td><td class="p-3">受信60・送信60</td><td class="p-3">IPv4/IPv6も別カウント</td></tr>
+                  <tr><td class="p-3 font-semibold">ENIあたりSG</td><td class="p-3">ENI</td><td class="p-3">5</td><td class="p-3">最大16</td></tr>
+                  <tr><td class="p-3 font-semibold">Network ACL</td><td class="p-3">VPC</td><td class="p-3">200</td><td class="p-3">調整可能</td></tr>
+                  <tr><td class="p-3 font-semibold">NACLルール</td><td class="p-3">NACL</td><td class="p-3">受信20・送信20</td><td class="p-3">各方向最大40。増加は性能影響に注意</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="mt-5 rounded-2xl bg-blue-50 p-4 text-sm text-slate-700 leading-relaxed"><strong class="text-sky-900">掛け算の制約：</strong>「1 SGあたりのルール数 × 1 ENIあたりのSG数」は1,000以下である必要があります。片方を引き上げると、もう片方を同時に最大まで使えない場合があります。</div>
+
+            <div data-quiz data-id="sq-q-product" data-answer="c" data-explanation="80 × 12 = 960なので1,000以下です。100 × 12 = 1,200は制約を超えます。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q5. 掛け算の制約1,000以内に収まる構成は？</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq5" value="a"><span>100ルール × 16 SG = 1,600</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq5" value="b"><span>100ルール × 12 SG = 1,200</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq5" value="c"><span>80ルール × 12 SG = 960</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq5" value="d"><span>200ルール × 8 SG = 1,600</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.4 使用量を先読みする</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">デプロイ後に気づくのではなく、現在数と追加予定数を適用クォータへ照合します。初期値はスクリーンショットと同じ「VPC 4個、2個追加、上限5」です。</p>
+            <div data-quota-calculator class="quota-calc mt-5">
+              <div class="flex items-center justify-between gap-3"><div class="font-bold text-sky-900">クォータ使用量シミュレーター</div><div data-quota-used class="text-sm font-bold text-sky-700">6 / 5</div></div>
+              <div class="quota-calc-fields mt-4">
+                <label>現在の使用数<input data-quota-current type="number" min="0" value="4" inputmode="numeric"></label>
+                <label>追加予定数<input data-quota-planned type="number" min="0" value="2" inputmode="numeric"></label>
+                <label>適用クォータ<input data-quota-limit type="number" min="0" value="5" inputmode="numeric"></label>
+              </div>
+              <div class="quota-calc-track mt-4"><div data-quota-bar style="width:100%"></div></div>
+              <div data-quota-result class="quota-calc-result mt-4" aria-live="polite"></div>
+            </div>
+            <div data-quiz data-id="sq-q-headroom" data-answer="b" data-explanation="適用値の100%まで使い切る運用では、突発的な増設や障害時の再作成ができません。余裕を持って監視し、早めに対処します。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q6. クォータ運用として最も安全なのは？</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq6" value="a"><span>常に100%まで使用してから検討する</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq6" value="b"><span>使用率に余裕を設け、将来増分と障害時の再作成分も見込む</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq6" value="c"><span>既定値だけを設計書へ固定し、適用値は見ない</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center gap-3 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編</h2><span class="tb-badge is-prac">実務</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 CloudFormation失敗時の切り分け</h3>
+            <p class="text-[15px] text-slate-700 leading-relaxed">最初にスタックイベントの<strong class="text-sky-900">最初のCREATE_FAILED</strong>を探します。後続の「キャンセル」「ロールバック」は結果であり、根本原因ではないことが多いためです。</p>
+            <div class="mt-5 rounded-2xl bg-slate-900 text-slate-200 p-4 font-mono text-xs sm:text-sm overflow-x-auto"><span class="text-red-300">AWS::EC2::VPC  CustomerVpc  CREATE_FAILED</span><br>Resource handler returned message: "The maximum number of VPCs has been reached."</div>
+            <p class="text-sm text-slate-600 mt-4">次のカードを、正しい調査順に並べ替えてください。矢印ボタンでも操作できます。</p>
+            <div class="mt-4">
+              <ul data-sortable data-id="sq-q-troubleshoot" data-answer="event,resource,scope,quota,action" class="tb-sortable">
+                <li data-id="quota">Service Quotasで現在の適用値と使用状況を確認する</li>
+                <li data-id="event">CloudFormationのスタックイベントで最初の失敗を探す</li>
+                <li data-id="action">不要リソース削除・設計変更・引き上げ申請から対処を選ぶ</li>
+                <li data-id="scope">対象アカウント、リージョン、AZ/VPC等のスコープを確定する</li>
+                <li data-id="resource">失敗した論理リソースとAWSサービスのエラーを読む</li>
+              </ul>
+              <p data-sortable-feedback class="mt-3 text-sm text-slate-500">順番を変更すると自動判定します。</p>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 Console・CLIで確認し、引き上げを申請する</h3>
+            <ol class="mt-4 space-y-3 text-sm text-slate-700 list-decimal pl-5">
+              <li><strong>Service Quotas</strong>を開き、サービス（Amazon Virtual Private Cloud）を選ぶ。</li>
+              <li>対象リージョンを合わせ、クォータ名、適用値、調整可能か、利用率を確認する。</li>
+              <li>調整可能なら希望値を申請する。必要日より前に申請し、承認状況を追う。</li>
+              <li>承認後に適用値を再確認し、CloudFormationを再実行する。</li>
+            </ol>
+            <pre class="tb-code mt-5"><code><span class="com"># 1. Amazon VPCの適用クォータ一覧から、名前・値・QuotaCodeを取得</span>
+aws service-quotas list-service-quotas \
+  --service-code vpc \
+  --region ap-northeast-1 \
+  --query 'Quotas[].{Name:QuotaName,Value:Value,Code:QuotaCode,Adjustable:Adjustable}' \
+  --output table
+
+<span class="com"># 2. 一覧で得たQuotaCodeを使って引き上げを申請</span>
+aws service-quotas request-service-quota-increase \
+  --service-code vpc \
+  --quota-code &lt;QUOTA_CODE&gt; \
+  --desired-value 20 \
+  --region ap-northeast-1</code></pre>
+            <div class="mt-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-950"><strong>注意：</strong>クォータ引き上げは即時・自動承認とは限りません。また、IAM権限、OrganizationsのSCP、実サービス固有の制約はService Quotasとは別レイヤーです。</div>
+
+            <div data-terminal data-id="sq-q-cli" data-expect="aws service-quotas list-service-quotas --service-code vpc --region ap-northeast-1" data-output="✓ Amazon VPCの適用クォータ一覧を取得しました（演習用出力）" data-hint="service-quotas list-service-quotas、service-code vpc、region ap-northeast-1 を指定します" class="tb-terminal mt-5">
+              <div class="tb-terminal-bar"><span></span><span></span><span></span></div>
+              <pre class="text-slate-400 mb-2"># 東京リージョンのAmazon VPCクォータ一覧を取得してください</pre>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.3 上限に強い設計と運用</h3>
+            <div class="grid md:grid-cols-2 gap-4 mt-5">
+              <div class="rounded-2xl bg-sky-50 p-5"><div class="font-bold text-sky-900">デプロイ前</div><ul class="mt-3 text-sm text-slate-700 space-y-2 list-disc pl-5"><li>IaCの追加数を見積もる</li><li>適用値と現在使用量を確認</li><li>障害時の再作成余力を残す</li><li>必要なら早めに引き上げ申請</li></ul></div>
+              <div class="rounded-2xl bg-sky-50 p-5"><div class="font-bold text-sky-900">継続運用</div><ul class="mt-3 text-sm text-slate-700 space-y-2 list-disc pl-5"><li>使用率を定期監視する</li><li>不要なEIP・ENI・SG等を整理</li><li>アカウント／リージョン別に台帳化</li><li>増加傾向から先に容量計画</li></ul></div>
+            </div>
+            <p class="text-sm text-slate-700 leading-relaxed mt-5"><strong class="text-sky-900">顧客ごとにVPCを作るべきか：</strong>強いネットワーク分離が必要なら有効ですが、顧客数に比例してVPC、サブネット、NAT Gateway、EIP、ルート、ログ、コストが増えます。共有VPC、共有サービスVPC、別アカウント化なども、分離要件・運用負荷・障害影響範囲と合わせて検討します。</p>
+
+            <div data-quiz data-id="sq-q-design" data-answer="b" data-explanation="単純に上限を上げ続けるだけでなく、分離要件を満たす最小単位、コスト、運用、障害影響を含めてアーキテクチャを見直します。" class="tb-card p-5 sm:p-6 mt-5 ring-sky-100">
+              <div class="font-semibold text-sky-900 mb-3">Q7. 顧客数が数百へ増える計画です。最も適切な対応は？</div>
+              <ul class="space-y-2">
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq7" value="a"><span>設計を変えず、デプロイ失敗のたびにだけ対応する</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq7" value="b"><span>必要な分離レベルを再確認し、引き上げと共有／マルチアカウント設計を比較する</span></label></li>
+                <li><label class="tb-quiz-option"><input type="radio" name="sqq7" value="c"><span>すべてを同一サブネットへ移し、セキュリティ要件を無視する</span></label></li>
+              </ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center gap-3 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <h3 class="text-lg font-bold text-sky-900 mb-3">ケース：次の取引先3社を安全に追加する</h3>
+          <div class="rounded-2xl bg-sky-50 p-5 text-sm text-slate-700 leading-relaxed">
+            <p>東京リージョンにVPCが5個あり、適用クォータも5です。新たに3社分のVPCを同じテンプレートで追加予定です。各VPCは3 AZ、各AZにPublic NAT Gatewayを1台作ります。現在、対象の各AZにはNAT Gatewayが4台ずつあります。</p>
+          </div>
+          <div class="mt-5 space-y-3 text-sm text-slate-700">
+            <p><strong class="text-sky-900">VPC：</strong>5 + 3 = 8。現状の適用クォータ5を超えます。</p>
+            <p><strong class="text-sky-900">NAT Gateway：</strong>各AZで4 + 3 = 7。各AZの既定クォータ5を超えます。</p>
+            <p><strong class="text-sky-900">結論：</strong>VPCだけを引き上げても不十分。テンプレートが作る全リソースを、正しいスコープで事前確認する必要があります。</p>
+          </div>
+
+          <div data-quiz data-id="sq-q-final" data-answer="a,c,d" data-multiple data-explanation="VPCはリージョン単位、NAT GatewayはAZ単位で不足します。適用値・使用量を確認し、引き上げまたは設計変更後に再実行します。" class="tb-card p-5 sm:p-6 mt-6 ring-sky-100">
+            <div class="font-semibold text-sky-900 mb-3">Q8. デプロイ前に行うべきことをすべて選んでください。</div>
+            <ul class="space-y-2">
+              <li><label class="tb-quiz-option"><input type="checkbox" name="sqq8" value="a"><span>東京リージョンのVPC適用クォータと使用数を確認する</span></label></li>
+              <li><label class="tb-quiz-option"><input type="checkbox" name="sqq8" value="b"><span>テンプレートが同じなので、確認せず3スタックを同時実行する</span></label></li>
+              <li><label class="tb-quiz-option"><input type="checkbox" name="sqq8" value="c"><span>使用する各AZのNAT Gateway数を確認する</span></label></li>
+              <li><label class="tb-quiz-option"><input type="checkbox" name="sqq8" value="d"><span>必要な引き上げ申請またはネットワーク設計変更を先に完了する</span></label></li>
+            </ul>
+            <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center gap-3 mb-5"><span class="tb-section-num">5</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">次のステップ</h2></div>
+        <div class="grid md:grid-cols-2 gap-5">
+          <div class="tb-card p-5 sm:p-6">
+            <h3 class="font-bold text-sky-900">実環境チェックリスト</h3>
+            <ul class="mt-4 space-y-2 text-sm text-slate-700 list-disc pl-5 marker:text-sky-500">
+              <li>対象アカウントとリージョンを明記する</li>
+              <li>適用値・使用数・追加予定数を記録する</li>
+              <li>クォータのスコープと調整可否を確認する</li>
+              <li>複合制約と関連リソースも確認する</li>
+              <li>余裕を残して監視・申請する</li>
+            </ul>
+          </div>
+          <div class="tb-card p-5 sm:p-6">
+            <h3 class="font-bold text-sky-900">公式リファレンス</h3>
+            <ul class="mt-4 space-y-3 text-sm">
+              <li><a class="text-sky-700 hover:underline" href="https://docs.aws.amazon.com/vpc/latest/userguide/amazon-vpc-limits.html" target="_blank" rel="noopener">Amazon VPC quotas ↗</a></li>
+              <li><a class="text-sky-700 hover:underline" href="https://docs.aws.amazon.com/servicequotas/latest/userguide/getting-started.html" target="_blank" rel="noopener">Service Quotasの開始方法 ↗</a></li>
+              <li><a class="text-sky-700 hover:underline" href="https://docs.aws.amazon.com/servicequotas/latest/userguide/request-quota-increase.html" target="_blank" rel="noopener">クォータ引き上げの申請 ↗</a></li>
+              <li><a class="text-sky-700 hover:underline" href="https://docs.aws.amazon.com/cli/latest/reference/service-quotas/request-service-quota-increase.html" target="_blank" rel="noopener">AWS CLI request-service-quota-increase ↗</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="mt-6 rounded-2xl bg-white/70 ring-1 ring-sky-100 p-4 text-xs text-slate-500 leading-relaxed">クォータはサービス更新や個別承認で変わる可能性があります。本教材の数値は2026年10月29日にAWS公式ドキュメントで確認した既定値です。実際の判断では、対象アカウント・対象リージョンの適用クォータを正としてください。</div>
+      </section>
+    </article>
+  </main>
+
+  <script src="../../../assets/shared.js?v=20261029-3"></script>
+</body>
+</html>

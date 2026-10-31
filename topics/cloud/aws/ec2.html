@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ja" data-topic-id="cloud-aws-ec2">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Amazon EC2のAMI、EBSスナップショット、ファイルシステム整合性、CreateImage API、EventBridgeとLambdaによる日次バックアップ自動化を学ぶ通常版教材。">
+  <title>Amazon EC2 — AMI・EBS・バックアップ運用 | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"Amazon EC2"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">通常版 · 約45分</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">Amazon EC2<span class="block sm:inline"> — AMI・EBS・バックアップ運用</span></h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">単一EC2で動くOS・POSアプリ・注文DBを、複数EBSボリュームごと日次AMIへ保存する。再起動と整合性の関係から、自動化・復元試験・世代管理まで理解します。</p>
+
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">提示された設問の結論</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">EventBridgeで毎日起動するLambdaから、<code>CreateImage</code>を既定の再起動ありで呼び出します。</p>
+          <p class="ct-copy mt-2">APIの正式なパラメーター名は<code>reboot</code>ではなく<code>NoReboot</code>です。<code>NoReboot=false</code>または省略なら、EC2はAMI作成前にインスタンスを停止・再起動し、バッファーをEBSへ書き出してファイルシステムの整合性を確保します。</p>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500">
+            <li>AMI、EBSボリューム、EBSスナップショット、ブロックデバイスマッピングの関係を説明する。</li>
+            <li><code>NoReboot</code>の値と、ファイルシステム整合性・停止時間のトレードオフを判断する。</li>
+            <li>EventBridge Scheduler、Lambda、IAM、保持・監視・復元試験まで含む日次運用を設計する。</li>
+          </ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">AMIとEBS</a><a href="#consistency" class="underline underline-offset-4">整合性</a><a href="#automation" class="underline underline-offset-4">日次自動化</a><a href="#backup" class="underline underline-offset-4">AWS Backup比較</a><a href="#case" class="underline underline-offset-4">総合演習</a></nav>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-6"><div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div><div class="tb-progress"><div data-progress-bar style="width:0%"></div></div><p class="mt-2 text-xs text-slate-500">10問の正解状況を、このブラウザに保存します。</p></div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編：AMIとEBSを分けて理解する</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 AMIはEC2を再現する起動テンプレート</h3>
+            <div class="ct-copy"><p>Amazon Machine Image（AMI）は、新しいEC2インスタンスを起動するための情報をまとめたイメージです。EBS-backed AMIでは、OSが入ったルートボリュームや追加EBSボリュームのスナップショットと、どのデバイスとして接続するかを示すブロックデバイスマッピングが中心になります。</p><p>AMI自体を「サーバーの完全な実行状態」と考えてはいけません。CPUやメモリ上の実行状態を保存するものではなく、再起動可能なディスク内容と起動設定を残します。</p></div>
+            <div class="ct-flow" aria-label="AMIとEBSの関係"><div><small>EC2 INSTANCE</small><strong>OS・POS・注文DB</strong><p>稼働中のCPU、メモリ、接続されたストレージ</p></div><div><small>CREATE IMAGE</small><strong>AMIを登録</strong><p>起動情報とブロックデバイスマッピングを記録</p></div><div><small>EBS SNAPSHOTS</small><strong>各ボリュームのデータ</strong><p>ルートと接続中の追加EBSをスナップショット化</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/creating-an-ami-ebs.html" target="_blank" rel="noopener">EBS-backed AMIを作成する</a></p>
+            <div data-quiz data-id="ec2-q1" data-answer="b" data-explanation="EBS-backed AMIは、起動情報・ブロックデバイスマッピングと、ルートおよび追加EBSボリュームのスナップショットを使ってEC2を再現します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q1. EBS-backed AMIの説明として最も適切なのは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ec2-q1" value="a"><span>EC2のCPUとメモリの実行状態を永久保存する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q1" value="b"><span>起動情報とEBSスナップショットを使って新しいEC2を起動する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q1" value="c"><span>セキュリティグループの通信ログだけを保存する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q1" value="d"><span>RDSのポイントインタイム復旧を実行する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 複数EBSボリュームもAMI作成の対象</h3>
+            <div class="ct-copy"><p>実行中のEBS-backedインスタンスからAMIを作ると、EC2はルートボリュームと、インスタンスに接続されている追加EBSボリュームのスナップショットを作成します。新しいインスタンスをAMIから起動すると、スナップショットを基にEBSボリュームが作られます。</p><p>インスタンスストアは一時ストレージです。ブロックデバイスマッピングに情報を含めることはできますが、元のインスタンスストアのデータはAMIへ保存されません。永続化が必要な注文データはEBSなどへ置きます。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">要素</th><th scope="col">AMI作成時</th><th scope="col">復元時</th></tr></thead><tbody><tr><th scope="row">ルートEBS</th><td>スナップショットを作成</td><td>OS用EBSとして復元</td></tr><tr><th scope="row">追加EBS</th><td>接続中の各ボリュームをスナップショット化</td><td>マッピングに従って新しいEBSを作成</td></tr><tr><th scope="row">インスタンスストア</th><td>元データは保存されない</td><td>空の一時ストレージとして提供</td></tr></tbody></table></div>
+            <div data-quiz data-multiple data-id="ec2-q2" data-answer="a,c" data-explanation="ルートEBSと接続中の追加EBSはスナップショットの対象です。インスタンスストアの元データやメモリ内容はAMIへ保存されません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q2. 実行中のEBS-backed EC2からAMIを作るとき、保存対象になるものを2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="ec2-q2" value="a"><span>ルートEBSボリューム</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ec2-q2" value="b"><span>CPUレジスターとメモリ上の処理状態</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ec2-q2" value="c"><span>接続中の追加EBSボリューム</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ec2-q2" value="d"><span>インスタンスストア上の元データ</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="consistency" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：停止時間と整合性を判断する</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 APIパラメーターはNoReboot</h3>
+            <div class="ct-copy"><p><code>CreateImage</code> APIの正式なパラメーターは<code>NoReboot</code>です。<code>false</code>または省略が既定で、AMI作成前にインスタンスを停止・再起動します。これにより、バッファーやメモリ上の書き込み対象をボリュームへ反映してからスナップショットを作れます。</p><p><code>NoReboot=true</code>なら稼働を続けたまま作成できますが、スナップショットに入るのはその時点までにボリュームへ書かれたデータです。AWSは、この方法で作成したイメージのファイルシステム整合性を保証しません。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">CreateImageの指定</th><th scope="col">インスタンス</th><th scope="col">整合性</th><th scope="col">向く場面</th></tr></thead><tbody><tr><th scope="row">NoReboot=false／省略</th><td>停止してスナップショット後に再起動</td><td>ファイルシステムの整合性を確保</td><td>短い停止を許容でき、整合性を優先</td></tr><tr><th scope="row">NoReboot=true</th><td>稼働したまま</td><td>クラッシュ整合性。未書き込みデータは含まれない</td><td>アプリ側で事前に静止できる場合など</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateImage.html" target="_blank" rel="noopener">CreateImage API — NoReboot</a></p>
+            <div data-quiz data-id="ec2-q3" data-answer="c" data-explanation="APIのパラメーター名はNoRebootです。省略またはfalseで再起動あり、trueで再起動なしになります。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q3. 再起動して整合性を確保するCreateImage APIの指定は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ec2-q3" value="a"><span>Reboot=trueだけが正式な指定</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q3" value="b"><span>NoReboot=true</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q3" value="c"><span>NoReboot=false、またはNoRebootを省略</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q3" value="d"><span>DeleteOnTermination=true</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+            <div data-fill data-id="ec2-q4" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q4. 再起動しない指定で、作成イメージの整合性を保証できないAPIパラメーターは？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="NoReboot=true|NoReboot true|no-reboot|--no-reboot" aria-label="再起動しないパラメーター" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 ファイルシステム整合性とDB整合性は別</h3>
+            <div class="ct-copy"><p>再起動ありのAMI作成は、ファイルシステムを静止した状態でスナップショットを取得するための選択です。ただし、ファイルシステムが整合していることと、データベースが業務上正しい時点へ必ず復旧できることは同義ではありません。</p><p>DB固有のログ、トランザクション、外部システムとの連携まで含めたアプリケーション整合性が必要なら、DBの停止・チェックポイント・バックアップ機能や、ベンダー推奨手順を組み合わせます。復元後にアプリとDBを起動して検証する復元テストが不可欠です。</p></div>
+            <div class="ct-flow" aria-label="整合性の段階"><div><small>CRASH CONSISTENT</small><strong>書き込み済みデータ</strong><p>突然電源が落ちた直後に近い状態</p></div><div><small>FILE SYSTEM</small><strong>ファイルシステムを静止</strong><p>再起動・停止でバッファーを反映</p></div><div><small>APPLICATION</small><strong>DBや業務処理も整合</strong><p>DB固有の静止・バックアップ・検証が必要</p></div></div>
+            <div class="ct-note"><strong>この設問が要求しているのはファイルシステム整合性です。</strong>そのため、選択肢の中では再起動ありのCreateImageが正解です。本番のPOS・注文DBでは、より強いアプリケーション整合性の要件も別途確認します。</div>
+            <div data-quiz data-id="ec2-q5" data-answer="d" data-explanation="再起動ありのAMIはファイルシステム整合性を高めますが、DB固有のアプリケーション整合性まで自動的に証明するわけではありません。復元試験も必要です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q5. POSの注文DBまで確実に復元できることを確認する最も適切な考え方は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ec2-q5" value="a"><span>NoReboot=trueだけ設定すれば十分</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q5" value="b"><span>AMIがavailableなら業務整合性も自動保証される</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q5" value="c"><span>セキュリティグループを全開放して確認する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q5" value="d"><span>DB固有の整合性手順を組み合わせ、実際に復元テストする</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="automation" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：日次AMIを安全に自動化する</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 EventBridge Scheduler → Lambda → CreateImage</h3>
+            <div class="ct-copy"><p>毎日決まった時間にAMIを作るなら、EventBridge SchedulerでLambda関数を呼び、LambdaからEC2の<code>CreateImage</code>を実行できます。設問にあるEventBridgeのスケジュールルールでも実現できますが、AWSは現在、より柔軟なEventBridge Schedulerの利用を推奨しています。</p><p>Lambdaは対象インスタンスID、一意なAMI名、説明、タグを設定し、<code>NoReboot=False</code>で作成します。作成リクエストが成功してもAMIはまず<code>pending</code>になるため、後続処理では<code>available</code>への遷移を確認します。</p></div>
+            <div class="ct-flow" aria-label="日次AMI作成フロー"><div><small>01 SCHEDULE</small><strong>毎日深夜に起動</strong><p>業務影響の小さい時刻とタイムゾーンを設定</p></div><div><small>02 LAMBDA</small><strong>CreateImageを呼ぶ</strong><p>NoReboot=false、名前・タグ・対象IDを指定</p></div><div><small>03 EC2 / EBS</small><strong>AMIとスナップショット</strong><p>状態を監視し、保持期限に従って世代管理</p></div></div>
+            <div class="rounded-2xl bg-slate-900 text-sky-100 p-4 mt-5 overflow-x-auto text-xs sm:text-sm leading-relaxed"><pre><code>response = ec2.create_image(
+    InstanceId=os.environ["INSTANCE_ID"],
+    Name=f"pos-daily-{datetime.now(timezone.utc):%Y%m%d-%H%M%S}",
+    NoReboot=False,
+    TagSpecifications=[...]
+)</code></pre></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/lambda/latest/dg/with-eventbridge-scheduler.html" target="_blank" rel="noopener">EventBridge SchedulerからLambdaを呼び出す</a></p>
+            <div data-quiz data-id="ec2-q6" data-answer="a" data-explanation="毎日のスケジュールはEventBridge Scheduler、API呼び出しはLambda、AMI作成はEC2 CreateImageという分担です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q6. 毎日AMIを自動作成する構成として最も適切なのは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ec2-q6" value="a"><span>EventBridge Scheduler → Lambda → EC2 CreateImage</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q6" value="b"><span>VPCフローログ → Route 53 → CreateImage</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q6" value="c"><span>セキュリティグループ → CloudTrail → EBS削除</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q6" value="d"><span>ALB → IAMユーザー → NoReboot=true</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div id="backup" class="tb-card p-5 sm:p-7 scroll-mt-28">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 AWS Backupは再起動パラメーターを指定しない</h3>
+            <div class="ct-copy"><p>AWS Backupは、EC2と関連EBSボリュームを1つの復旧ポイントとして保護し、スケジュール・保持期間・バックアップボールトを一元管理できます。ただしEC2バックアップはデフォルトで「no reboot」で取得され、バックアッププランにCreateImage APIの<code>NoReboot=false</code>を指定する欄はありません。</p><p>したがって、選択肢にある「AWS Backupのrebootパラメーターを有効化」は成立しません。複数EBSのクラッシュ整合性を持つバックアップにはAWS Backupが便利ですが、今回のように再起動してファイルシステムを静止する要件は、別の制御が必要です。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">方法</th><th scope="col">得意なこと</th><th scope="col">今回の注意</th></tr></thead><tbody><tr><th scope="row">CreateImageを直接実行</th><td>NoRebootを明示してAMI作成動作を制御</td><td>停止時間、IAM、保持、監視を自分で設計</td></tr><tr><th scope="row">AWS Backup</th><td>横断的なスケジュール、保持、ボールト、復旧ポイント</td><td>EC2はno rebootが既定。プランで再起動を指定しない</td></tr><tr><th scope="row">DB固有バックアップ</th><td>トランザクションやログを理解した復旧</td><td>AMIとは別の保持・復旧手順が必要</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/aws-backup/latest/devguide/recov-point-create-on-demand-backup.html" target="_blank" rel="noopener">AWS BackupのEC2バックアップ</a>、<a href="https://docs.aws.amazon.com/aws-backup/latest/devguide/multi-volume-crash-consistent.html" target="_blank" rel="noopener">複数EBSのクラッシュ整合性</a></p>
+            <div data-quiz data-id="ec2-q7" data-answer="c" data-explanation="AWS BackupのバックアッププランにはCreateImageの再起動動作を指定する設定がありません。EC2バックアップはno rebootが既定です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q7. AWS BackupでEC2のファイルシステム整合性を確保するため、バックアッププランのreboot設定を有効化する。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ec2-q7" value="a"><span>正しい。すべてのバックアップルールに必須</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q7" value="b"><span>正しい。Windowsだけ設定できる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q7" value="c"><span>誤り。そのようなCreateImageの再起動設定欄はない</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q7" value="d"><span>誤り。AWS BackupはEC2を保護できない</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.3 最小権限・世代管理・復元試験まで設計する</h3>
+            <div class="ct-copy"><p>Lambda実行ロールには、対象EC2のイメージ作成、作成したAMIやスナップショットへのタグ付け、状態確認、期限切れAMIの登録解除とスナップショット削除など、実装に必要な権限だけを与えます。対象をタグで識別し、誤ったインスタンスをバックアップしないようにします。</p><p>「毎日作る」だけでは運用は完成しません。保持日数・最低世代数、失敗通知、AMIが<code>available</code>になるまでの監視、復元用サブネットでの定期起動、アプリ・DBの検証、古いAMIと関連スナップショットの削除まで決めます。</p></div>
+            <div class="ct-flow" aria-label="バックアップ運用の3段階"><div><small>CREATE</small><strong>作る</strong><p>日次スケジュール、整合性、タグ、暗号化</p></div><div><small>RETAIN</small><strong>守る</strong><p>保持期間、世代数、アクセス制御、失敗通知</p></div><div><small>RESTORE</small><strong>戻せることを試す</strong><p>隔離環境で起動し、OS・アプリ・DBを検証</p></div></div>
+            <div data-quiz data-multiple data-id="ec2-q8" data-answer="a,b,d" data-explanation="バックアップ運用は作成だけでなく、失敗監視、保持・削除、実際の復元試験まで含めて設計します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q8. 日次AMI運用に必要な項目を3つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="ec2-q8" value="a"><span>作成失敗とpending長期化の監視</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ec2-q8" value="b"><span>保持期間と古いAMI・スナップショットの削除</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ec2-q8" value="c"><span>Lambdaロールへ全AWS操作の管理者権限</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ec2-q8" value="d"><span>隔離環境での定期的な復元試験</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+            <div data-quiz data-id="ec2-q9" data-answer="b" data-explanation="AMIを登録解除しただけでは、関連するEBSスナップショットが自動で必ず消えるとは限りません。保持・削除処理を関連付けて管理します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q9. 古いAMIの世代管理で特に確認することは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ec2-q9" value="a"><span>AMI名を短くすれば保存料金はゼロになる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q9" value="b"><span>AMIの登録解除と関連EBSスナップショットの削除を管理する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q9" value="c"><span>古いAMIほど自動的に暗号強度が上がる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q9" value="d"><span>全世代を無期限に保存する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：POSインスタンスの日次AMI</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <div class="ct-copy"><p>要件は、①単一EC2に接続された複数EBSを含むAMIを毎日作る、②ファイルシステム整合性を確保する、③手動作業をなくす、の3点です。</p><p>Lambdaから<code>CreateImage</code>を<code>NoReboot=false</code>で呼び、EventBridge Schedulerで毎日起動します。AWS Backupのプランには再起動動作を指定できず、<code>NoReboot=true</code>では整合性要件を満たしません。</p></div>
+          <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">選択肢</th><th scope="col">評価</th></tr></thead><tbody><tr><th scope="row">AWS Backup＋reboot</th><td>そのようなバックアッププラン設定はない</td></tr><tr><th scope="row">AWS Backup＋no-reboot</th><td>設定項目がなく、整合性要件にも合わない</td></tr><tr><th scope="row">Lambda＋再起動ありCreateImage</th><td>正解。APIで動作を制御し、日次実行できる</td></tr><tr><th scope="row">Lambda＋NoReboot=true</th><td>無停止だがファイルシステム整合性を保証しない</td></tr></tbody></table></div>
+          <div data-quiz data-id="ec2-q10" data-answer="c" data-explanation="日次自動化にはEventBridgeとLambdaを使い、ファイルシステム整合性のためCreateImageはNoReboot=false（既定）で呼び出します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q10. 要件をすべて満たす最も適切な構成は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ec2-q10" value="a"><span>AWS Backupでreboot=trueを設定した日次ルール</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q10" value="b"><span>LambdaからNoReboot=trueでCreateImageを実行</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q10" value="c"><span>EventBridgeで毎日起動するLambdaから、NoReboot=falseでCreateImageを実行</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q10" value="d"><span>EBSをインスタンスストアへ移して毎日コピー</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          <div class="ct-note mt-5"><strong>覚え方：</strong>AMIは「EC2を起動し直すための設計図＋EBSスナップショット」。整合性を優先するなら再起動あり。APIでは「Reboot=true」ではなく「NoReboot=false」です。</div>
+        </div>
+      </section>
+      <section id="regional-ami-placement" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">5</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">追加演習：AMIのリージョン展開と物理障害分離</h2></div>
+        <div class="grid md:grid-cols-2 gap-5">
+          <div class="tb-card p-5 sm:p-6"><h3 class="font-bold text-sky-900">カスタムAMIを別リージョンで使う</h3><p class="ct-copy mt-3">AMIはリージョン固有です。東京のAMIをシンガポールとシドニーで使うには、それぞれへ<code>copy-image</code>でコピーします。共有は同一リージョン内の別アカウントへ起動権限を渡す機能で、リージョン間の実体移動ではありません。継続配布はEC2 Image Builderのdistribution settingsも候補です。</p></div>
+          <div class="tb-card p-5 sm:p-6"><h3 class="font-bold text-sky-900">9台を障害ドメインへ分散する</h3><p class="ct-copy mt-3">ラックレベルのSpread Placement Groupは同一リージョン内の複数AZにまたがれ、各AZで最大7台です。9台なら複数AZへ分けます。現在の公式説明は「各インスタンスを別ラック（独立した電源・ネットワーク）へ配置」であり、「必ず別の物理サーバー」という古い言い換えより、ラック障害の分離として理解します。</p></div>
+        </div>
+        <div data-quiz data-id="ec2-q11" data-answer="a" data-explanation="AMIはリージョン固有なので、使用する各リージョンへコピーします。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q11. 東京のカスタムAMIをシンガポールとシドニーで使う方法は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ec2-q11" value="a"><span>各リージョンへAMIをコピーする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q11" value="b"><span>東京のAMIをパブリックにするだけ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ec2-q11" value="c"><span>AMIのアカウント共有だけを設定する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+      </section>
+    </article>
+
+    <section class="mt-12"><h2 class="text-xl font-bold text-sky-950 mb-4">次のステップ</h2><div class="tb-card p-5 sm:p-6"><ul class="space-y-3 text-sm text-slate-700"><li><a class="text-sky-700 underline" href="auto-scaling.html">Amazon EC2 Auto Scaling</a>：AMIと起動テンプレートを複数台の更新へ展開する。</li><li><a class="text-sky-700 underline" href="lambda.html">AWS Lambda</a>：スケジュール実行、再試行、同時実行制御を理解する。</li><li><a class="text-sky-700 underline" href="systems-manager.html">AWS Systems Manager</a>：AutomationによるAMI作成やEC2運用も比較する。</li><li><a class="text-sky-700 underline" href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/creating-an-ami-ebs.html" target="_blank" rel="noopener">AWS公式：EBS-backed AMIを作成する</a></li></ul></div></section>
+    <div class="mt-10 text-center"><a href="../../../index.html" class="inline-block rounded-full bg-white text-sky-700 ring-1 ring-sky-200 px-6 py-3 text-sm font-semibold shadow-sm">← 通常版の教材一覧へ</a></div>
+  </main>
+
+  <footer class="text-center text-xs text-slate-400 pb-10">Engineer Textbook · Amazon EC2 — AMI・EBS・バックアップ運用 · 公式資料確認：2026-10-29</footer>
+  <script src="../../../assets/shared.js?v=20261029-14"></script>
+</body>
+</html>

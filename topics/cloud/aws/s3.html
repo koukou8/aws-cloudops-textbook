@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ja" data-topic-id="cloud-aws-s3">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Amazon S3のバケットとオブジェクト、ストレージクラス、アクセス制御、暗号化、バージョニング、ライフサイクル、マルチパートアップロード、Transfer Accelerationの実装条件を学ぶ通常版教材。">
+  <title>Amazon S3 | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"Amazon S3"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">通常版 · 約50分</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">Amazon S3</h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">データをオブジェクトとして安全に保存し、必要な場所から取り出す。海外拠点からの画像アップロード設問を入口に、設計と運用を整理します。</p>
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">画像の設問から学ぶ</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">正解は1番目：S3 Transfer Accelerationを有効にします。</p>
+          <p class="ct-copy mt-2">海外のクリニックは最寄りのCloudFrontエッジロケーションへアップロードし、そこからAWSの最適化されたネットワーク経路で対象バケットへ転送されます。地理的に離れたクライアントと単一リージョンのS3バケット間の転送を改善する機能です。</p>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500"><li>バケット・オブジェクト・キーとリージョンの関係を説明する。</li><li>ストレージクラス、バージョニング、ライフサイクルを選び分ける。</li><li>安全な直接アップロードと、長距離・大容量転送を設計する。</li><li>Transfer AccelerationとAccess Points、Global Accelerator、CORSの目的を区別する。</li></ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">基礎</a><a href="#storage" class="underline underline-offset-4">保存設計</a><a href="#security" class="underline underline-offset-4">セキュリティ</a><a href="#transfer" class="underline underline-offset-4">転送</a><a href="#case" class="underline underline-offset-4">設問の解説</a></nav>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-6"><div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div><div class="tb-progress"><div data-progress-bar style="width:0%"></div></div><p class="mt-2 text-xs text-slate-500">11問の正解状況を、このブラウザに保存します。既存問題の進捗は引き継がれます。</p></div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編：バケットにオブジェクトを保存する</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 S3はオブジェクトストレージ</h3>
+            <div class="ct-copy"><p>Amazon Simple Storage Service（Amazon S3）は、ファイルの内容であるデータと、コンテンツタイプなどのメタデータを「オブジェクト」として保存します。オブジェクトはバケットに入り、キーによって識別されます。</p><p>サーバーのローカルディスクのような階層型ファイルシステムではありません。コンソールでフォルダーに見える区切りは、キーに含まれる <code>/</code> をプレフィックスとして表示したものです。</p></div>
+            <div class="ct-flow" aria-label="S3のデータモデル"><div><small>01 BUCKET</small><strong>保存先の入れ物</strong><p>リージョンを選び、ポリシーや機能を設定</p></div><div><small>02 KEY</small><strong>オブジェクトの名前</strong><p>例：clinic-a/2026/exam.jpg</p></div><div><small>03 OBJECT</small><strong>データ＋メタデータ</strong><p>画像本体、サイズ、Content-Typeなど</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html" target="_blank" rel="noopener">Amazon S3とは</a></p>
+            <div data-quiz data-id="s3-q1" data-answer="b" data-explanation="S3はオブジェクトストレージです。データとメタデータを持つオブジェクトを、バケット内のキーで識別します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q1. Amazon S3の分類として最も適切なのは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="s3-q1" value="a"><span>ブロックストレージ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q1" value="b"><span>オブジェクトストレージ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q1" value="c"><span>リレーショナルデータベース</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q1" value="d"><span>メッセージキュー</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 バケット名とリージョン</h3>
+            <div class="ct-copy"><p>一般用途バケットは作成時にAWSリージョンを選びます。バケットに保存したオブジェクトは、明示的に転送やレプリケーションを設定しない限り、選択したリージョンに置かれます。</p><p>バケット名はグローバル名前空間で一意にします。名前に顧客名、メールアドレス、診療情報などを入れず、用途を推測しにくい命名にします。データ所在地、遅延、料金、法令を基にリージョンを決めます。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">単位</th><th scope="col">主な設定</th><th scope="col">例</th></tr></thead><tbody><tr><th scope="row">バケット</th><td>リージョン、バージョニング、暗号化、アクセスポリシー</td><td>medical-images-prod</td></tr><tr><th scope="row">オブジェクト</th><td>キー、メタデータ、ストレージクラス、タグ</td><td>clinic-a/exam-001.dcm</td></tr></tbody></table></div>
+            <div data-quiz data-id="s3-q2" data-answer="c" data-explanation="S3の保存先はバケットで、個々のオブジェクトはキーによって識別します。バケットは選択したリージョンに作成します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q2. S3の基本的な組み合わせは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="s3-q2" value="a"><span>テーブル＋行番号</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q2" value="b"><span>ボリューム＋ブロック番号</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q2" value="c"><span>バケット＋オブジェクトキー</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q2" value="d"><span>サブネット＋ポート番号</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+            <div data-fill data-id="s3-q3" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q3. バケット内でオブジェクトを識別する名前を何と呼ぶ？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="キー|key|オブジェクトキー|object key" aria-label="オブジェクトを識別する名前" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="storage" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：保存期間とアクセス頻度で設計する</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 ストレージクラスを選ぶ</h3>
+            <div class="ct-copy"><p>料金は保存容量だけでなく、リクエスト、取り出し、最低保存期間、最小課金サイズ、データ転送も含めて比較します。アクセス頻度が読めない場合はS3 Intelligent-Tieringを候補にし、明確に低頻度・長期保管ならIA系やGlacier系を検討します。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">クラス</th><th scope="col">向くデータ</th><th scope="col">注意点</th></tr></thead><tbody><tr><th scope="row">S3 Standard</th><td>頻繁に読む本番データ</td><td>取り出し料金なし</td></tr><tr><th scope="row">Intelligent-Tiering</th><td>アクセスパターンが変化・不明</td><td>オブジェクト単位の監視・自動化料金</td></tr><tr><th scope="row">Standard-IA</th><td>長期保存・低頻度だが即時取得</td><td>取り出し料金と最低保存期間</td></tr><tr><th scope="row">Glacier系</th><td>アーカイブ、バックアップ</td><td>クラスごとに取得時間と最低保存期間が異なる</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html" target="_blank" rel="noopener">S3ストレージクラス</a></p>
+            <div data-quiz data-id="s3-q4" data-answer="b" data-explanation="アクセス頻度が変わり予測できないデータには、アクセス階層を自動で最適化するIntelligent-Tieringが有力です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q4. 検査画像の参照頻度が患者ごとに異なり、予測しにくい。最初に検討するクラスは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="s3-q4" value="a"><span>S3 Standardだけに固定</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q4" value="b"><span>S3 Intelligent-Tiering</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q4" value="c"><span>EC2 Instance Store</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q4" value="d"><span>Amazon SQS</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 バージョニングとライフサイクル</h3>
+            <div class="ct-copy"><p>S3 Versioningを有効にすると、同じキーへの上書きは新しいバージョンとして保存され、通常の削除では削除マーカーが現在版になります。過去版を残せるため、誤削除や上書きから復旧しやすくなります。</p><p>各バージョンは差分ではなく完全なオブジェクトとして課金されます。S3 Lifecycleで、一定期間後のストレージクラス移行、非現行バージョンの期限切れ、不完全なマルチパートアップロードの中止を自動化します。</p></div>
+            <div class="ct-flow" aria-label="S3ライフサイクル例"><div><small>DAY 0</small><strong>Standard / Intelligent</strong><p>直近の検査で参照される期間</p></div><div><small>DAY 90</small><strong>低頻度・アーカイブへ</strong><p>要件に合うクラスへ移行</p></div><div><small>RETENTION END</small><strong>期限切れ</strong><p>法令・社内規程に従い削除</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html" target="_blank" rel="noopener">S3 Versioning</a>、<a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/intro-lifecycle-rules.html" target="_blank" rel="noopener">Lifecycleルール</a></p>
+            <div data-quiz data-id="s3-q5" data-answer="c" data-explanation="バージョニング有効時の通常削除では削除マーカーが現在版になります。過去バージョンは残るため復元できます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q5. バージョニング有効バケットで、オブジェクトを通常削除すると？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="s3-q5" value="a"><span>全バージョンが必ず即時消去される</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q5" value="b"><span>バケット自体が削除される</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q5" value="c"><span>削除マーカーが現在版になり、過去版は残る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q5" value="d"><span>自動的に別リージョンへ移動する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="security" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：安全にアップロード・運用する</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 公開を防ぎ、最小権限で許可する</h3>
+            <div class="ct-copy"><p>S3バケットとオブジェクトは、明示的に許可しない限り非公開です。Block Public Accessを維持し、IAMポリシーとバケットポリシーで、必要な主体・操作・プレフィックスだけを許可します。</p><p>新規バケットではサーバー側暗号化が自動適用されます。管理要件に応じてSSE-S3またはAWS KMSキーを使うSSE-KMSを選び、通信はHTTPSを強制します。医療画像のような機微データでは、CloudTrailのデータイベントやS3のアクセスログ、Macieなども検討します。</p></div>
+            <div class="ct-note"><strong>CORSは認可ではありません。</strong>ブラウザーが異なるオリジンからS3へリクエストする際の許可ルールです。CORSを許可しても、IAMやバケットポリシーで許可されていない操作は成功しません。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-management.html" target="_blank" rel="noopener">S3のアクセス制御</a></p>
+            <div data-quiz data-multiple data-id="s3-q6" data-answer="a,c" data-explanation="Block Public Accessを維持し、IAM／バケットポリシーを最小権限にするのが基本です。CORSやバケット名だけではデータを保護できません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q6. 非公開の医療画像バケットで優先する対策を2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="s3-q6" value="a"><span>Block Public Accessを有効に保つ</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="s3-q6" value="b"><span>全利用者にs3:*を許可する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="s3-q6" value="c"><span>IAM／バケットポリシーを最小権限にする</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="s3-q6" value="d"><span>CORSを全オリジン許可すれば認証は不要</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div id="transfer" class="tb-card p-5 sm:p-7 scroll-mt-28">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 長距離転送はTransfer Acceleration</h3>
+            <div class="ct-copy"><p>S3 Transfer Accelerationは一般用途バケット単位で有効にし、<code>bucket-name.s3-accelerate.amazonaws.com</code> のような加速エンドポイントを使います。クライアントは近くのCloudFrontエッジロケーションへ接続し、そこからAWSの最適化されたネットワーク経路でバケットへ転送されます。利用者がCloudFrontディストリビューションを作成する仕組みではありません。</p><p>世界中から中央のバケットへアップロードするケースに向きます。追加料金があり、距離や回線によって効果が異なるため、AWSのSpeed Comparison toolや実データで測定します。バケット名にピリオドを含められない、仮想ホスト形式のリクエストが必要、対応リージョンを確認するといった前提条件もあります。</p></div>
+            <div class="ct-flow" aria-label="S3 Transfer Acceleration導入手順"><div><small>01 ENABLE</small><strong>バケットで有効化</strong><p>プロパティ、CLI、API、SDKから設定</p></div><div><small>02 ENDPOINT</small><strong>加速用URLへ変更</strong><p>有効化だけでなくクライアント側の接続先も変更</p></div><div><small>03 MEASURE</small><strong>速度と費用を実測</strong><p>拠点ごとに通常経路と比較して採用判断</p></div></div>
+            <div class="ct-note"><strong>実装上の要点：</strong>Transfer Accelerationを有効にしただけで、通常のリージョナルS3エンドポイントが自動的に高速化されるわけではありません。SDKの加速エンドポイント設定、または <code>bucket-name.s3-accelerate.amazonaws.com</code> を使用します。IPv4／IPv6の両方を使う場合は <code>bucket-name.s3-accelerate.dualstack.amazonaws.com</code> を選べます。</div>
+            <div data-s3-route class="s3-route mt-5">
+              <h4 class="font-bold text-sky-900">アップロード経路シミュレーター</h4><p class="text-sm text-slate-600 mt-2">距離と転送方式を変えて、役割の違いを確認します。速度の実測値ではありません。</p>
+              <div class="s3-route-fields"><label>クライアントとバケットの距離<select data-s3-distance><option value="same">同じリージョン付近</option><option value="near">国内・近距離</option><option value="far" selected>海外・長距離</option></select></label><label>転送方式<select data-s3-mode><option value="standard">通常のS3エンドポイント</option><option value="accelerated" selected>Transfer Acceleration</option></select></label></div>
+              <div class="s3-route-path" aria-label="アップロード経路"><div><small>CLIENT</small><strong data-s3-hop="client">海外クリニック</strong></div><span aria-hidden="true">→</span><div><small>ENTRY</small><strong data-s3-hop="entry">最寄りのエッジ</strong></div><span aria-hidden="true">→</span><div><small>DESTINATION</small><strong data-s3-hop="destination">リージョン内のS3</strong></div></div>
+              <div class="s3-route-result"><strong data-s3-result>長距離アップロードに適合</strong><p data-s3-detail class="mt-2">最寄りのエッジからAWSの最適化された経路を使います。追加料金と実測効果を確認します。</p></div>
+            </div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/transfer-acceleration.html" target="_blank" rel="noopener">S3 Transfer Accelerationの要件</a>、<a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/transfer-acceleration-getting-started.html" target="_blank" rel="noopener">有効化と加速エンドポイント</a>、<a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance-guidelines.html" target="_blank" rel="noopener">S3パフォーマンスガイドライン</a></p>
+            <div data-quiz data-id="s3-q7" data-answer="d" data-explanation="長距離にあるクライアントから単一リージョンのS3へ転送する要件には、Transfer Accelerationが直接対応します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q7. 海外拠点から東京リージョンのS3へ大きなファイルを継続的に送る。最も直接的な改善策は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="s3-q7" value="a"><span>CORSだけを有効化</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q7" value="b"><span>S3 Access Pointを海外リージョンに作成</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q7" value="c"><span>Global AcceleratorでS3バケットを直接登録</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q7" value="d"><span>S3 Transfer Accelerationを利用</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.3 大容量はマルチパート、直接投稿は署名付きURL</h3>
+            <div class="ct-copy"><p>マルチパートアップロードは、1つの大きなオブジェクトを複数のパートへ分けて並列送信します。一部が失敗しても該当パートだけを再送でき、AWSは100MB以上のオブジェクトで利用を推奨しています。</p><p>Webアプリのサーバーを画像データが通過しない構成では、バックエンドが短い有効期限と限定したキーを持つ署名付きURLを発行し、クライアントがS3へ直接PUTできます。URLは発行者の権限を一時的に委任するため、ログ、サイズ・形式検査、キー生成、失効時間を慎重に設計します。</p></div>
+            <div class="ct-flow" aria-label="署名付きURLによるアップロード"><div><small>01 REQUEST</small><strong>アプリへ投稿要求</strong><p>利用者を認証し、用途とサイズを検証</p></div><div><small>02 SIGN</small><strong>署名付きURLを発行</strong><p>短い期限と限定したオブジェクトキー</p></div><div><small>03 PUT</small><strong>S3へ直接アップロード</strong><p>必要ならマルチパートと加速を併用</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html" target="_blank" rel="noopener">マルチパートアップロード</a>、<a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html" target="_blank" rel="noopener">署名付きURL</a></p>
+            <div data-quiz data-id="s3-q8" data-answer="b" data-explanation="大容量ファイルはマルチパートに分割すると並列転送でき、失敗したパートだけを再送できます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q8. 5GBの画像アーカイブで、一部失敗時の全体再送を避けたい。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="s3-q8" value="a"><span>単一のPUTだけを使う</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q8" value="b"><span>マルチパートアップロードを使う</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q8" value="c"><span>バージョニングを停止する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q8" value="d"><span>CloudTrailを無効化する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+            <div data-fill data-id="s3-q9" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q9. 認証済み利用者へ、特定キーへの一時的な直接PUTを許可するURLは？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="署名付きURL|事前署名付きURL|presigned url|pre-signed url" aria-label="一時的な直接PUTを許可するURL" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：画像の設問を解く</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <div class="ct-copy"><p>要件は「海外の提携クリニックから、特定リージョンのS3バケットへ直接アップロードする際の長距離転送を改善する」です。この距離の課題に直接対応するのがS3 Transfer Accelerationです。</p></div>
+          <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">選択肢</th><th scope="col">本来の目的</th><th scope="col">評価</th></tr></thead><tbody><tr><th scope="row">S3 Transfer Acceleration</th><td>遠距離にあるクライアントと単一バケット間の転送最適化</td><td>正しい。エッジロケーションとAWSネットワークを利用する</td></tr><tr><th scope="row">S3 Access Points</th><td>利用者・アプリごとのアクセス経路とポリシー分離</td><td>不正解。一般用途バケット用Access Pointは関連バケットと同じリージョンに作成し、速度改善機能ではない</td></tr><tr><th scope="row">AWS Global Accelerator</th><td>ALB、NLB、EC2、Elastic IPなど対応エンドポイントへのネットワーク最適化</td><td>不正解。S3バケットを標準アクセラレーターのエンドポイントとして直接登録できない</td></tr><tr><th scope="row">CORS</th><td>ブラウザーのオリジン間アクセス許可</td><td>不正解。転送経路やアップロード速度は変えない</td></tr></tbody></table></div>
+          <div data-quiz data-id="s3-q10" data-answer="a" data-explanation="設問は遠隔地からS3への転送時間を問うため、S3 Transfer Accelerationが最も適切です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q10. 画像の設問で選ぶべき答えは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="s3-q10" value="a"><span>S3 Transfer Accelerationを有効化</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q10" value="b"><span>海外リージョンにS3 Access Pointを作成</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q10" value="c"><span>Global AcceleratorにS3バケットを登録</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q10" value="d"><span>CORSを有効化</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          <div data-quiz data-multiple data-id="s3-q11" data-answer="a,c,d" data-explanation="バケットで有効化したうえで加速エンドポイントを使用し、Speed Comparison toolや実データで効果を確認します。バケット名にピリオドを含めることはできません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q11. Transfer Acceleration導入時の正しい確認事項をすべて選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="s3-q11" value="a"><span>クライアントが加速エンドポイントを使用する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="s3-q11" value="b"><span>バケット名へ必ずピリオドを含める</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="s3-q11" value="c"><span>Speed Comparison toolや実データで効果を測る</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="s3-q11" value="d"><span>追加料金と対応リージョンを確認する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          <div class="ct-note"><strong>覚え方：</strong>「遠くからS3へ速く送る」はTransfer Acceleration。「大容量を分けて送る」はマルチパート。「一時的に直接送る権限」は署名付きURLです。</div>
+        </div>
+      </section>
+      <section id="replication-lock-versioning" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">5</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">追加演習：レプリケーション、Object Lock、版管理</h2></div>
+        <div class="space-y-5">
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">CRRで既定に複製されるもの</h3><p class="ct-copy mt-3">ライブレプリケーションはルール作成後の対象オブジェクトを複製し、オブジェクト本体に加えてメタデータ、ACL更新、オブジェクトタグなども扱います。既存オブジェクトはS3 Batch Replicationを使います。Glacier Flexible Retrieval／Deep Archive等に格納済みのソースオブジェクトは、復元して別ストレージクラスへコピーするまで複製できません。</p><p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication-what-is-isnot-replicated.html" target="_blank" rel="noopener">S3が複製するもの</a></p></div>
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">Governanceモードの保持を正当にバイパスする</h3><p class="ct-copy mt-3">対象バージョンを永久削除する主体には<code>s3:BypassGovernanceRetention</code>と<code>s3:DeleteObjectVersion</code>を許可し、<code>delete-object --version-id ... --bypass-governance-retention</code>のように明示します。バージョンIDなしの削除は削除マーカーを作るだけです。リーガルホールドが有効なら、Governanceのバイパスとは別に解除が必要です。</p></div>
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">同じリージョンで誤上書き・削除から守る</h3><p class="ct-copy mt-3">S3バージョニングで旧バージョンを保持し、ライフサイクルの<code>NoncurrentVersionExpiration</code>で非現行バージョンを120日後に削除します。CRRは別リージョン要件、MFA Deleteは日常運用の自動整理とは別の制御です。</p></div>
+        </div>
+        <div data-quiz data-id="s3-q12" data-answer="b" data-explanation="既存オブジェクトではなく、オブジェクト本体とメタデータがライブレプリケーションの対象です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q12. CRRを設定した直後、追加設定なしで複製対象になるものは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="s3-q12" value="a"><span>ルール作成前から存在する全オブジェクト</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q12" value="b"><span>ルールに一致する新規オブジェクトとそのメタデータ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="s3-q12" value="c"><span>権限のない他アカウント所有オブジェクト</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+      </section>
+    </article>
+
+    <section class="mt-12"><h2 class="text-xl font-bold text-sky-950 mb-4">次のステップ</h2><div class="tb-card p-5 sm:p-6"><ul class="space-y-3 text-sm text-slate-700"><li><a class="text-sky-700 underline" href="iam.html">IAM</a>：S3へアクセスする主体と最小権限を理解する。</li><li><a class="text-sky-700 underline" href="cloudtrail.html">CloudTrail</a>：S3の管理イベント・データイベントを監査する。</li><li><a class="text-sky-700 underline" href="lambda.html">Lambda</a>：S3イベントで画像処理を起動する。</li><li><a class="text-sky-700 underline" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/transfer-acceleration.html" target="_blank" rel="noopener">AWS公式：S3 Transfer Acceleration</a>：要件、対応リージョン、加速エンドポイントを確認する。</li><li><a class="text-sky-700 underline" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html" target="_blank" rel="noopener">AWS公式：Amazon S3</a></li></ul></div></section>
+    <div class="mt-10 text-center"><a href="../../../index.html" class="inline-block rounded-full bg-white text-sky-700 ring-1 ring-sky-200 px-6 py-3 text-sm font-semibold shadow-sm">← 通常版の教材一覧へ</a></div>
+  </main>
+  <footer class="text-center text-xs text-slate-400 pb-10">Engineer Textbook · Amazon S3 · 公式資料確認：2026-10-30</footer>
+  <script src="../../../assets/shared.js?v=20261030-11"></script>
+</body>
+</html>

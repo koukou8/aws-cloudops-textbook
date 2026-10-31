@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ja" data-topic-id="cloud-aws-systems-manager">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AWS Systems Managerを基礎から実務まで。EC2へのパッチ適用とサードパーティ製エージェントの継続配布を題材に、Patch Manager、Distributor、State Manager、Run Command、Session Manager、コンプライアンスレポートを図と演習で学びます。">
+  <title>AWS Systems Manager | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"Systems Manager"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <a href="../../../quick/index.html#systems-manager" style="display:inline-block;margin-bottom:20px;padding:8px 14px;background:#fff;border:1px solid #dce4ec;border-radius:6px;color:#1763c2;font-size:13px;text-decoration:none">← このテーマを約2〜3分で復習する</a>
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">AWS運用管理</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950">AWS Systems Manager</h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">EC2群へ同じルールでパッチを適用し、必要なエージェントを配布して、その状態を保つ。サーバー群の運用をまとめて管理するSSMの仕組みを学びます。</p>
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">2つの運用課題から学ぶ</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">OSパッチはPatch Manager、任意ソフトウェアの継続配布はDistributor＋State Managerです。</p>
+          <p class="ssm-copy mt-2">Patch Managerでパッチの選定と準拠状況を管理します。サードパーティ製エージェントはDistributorでパッケージ化し、<code>AWS-ConfigureAWSPackage</code>を使うState Manager関連付けで、タグに一致するLinuxノードへ継続的に適用します。</p>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500">
+            <li>Systems Managerの主要機能を、用途に応じて選び分ける。</li>
+            <li>管理対象ノードの前提条件と、パッチ選定・実行・再起動の関係を説明する。</li>
+            <li>80台の段階適用、継続運用、適用状況のレポートを設計する。</li>
+            <li>DistributorとState Managerを組み合わせ、ソフトウェアの導入・更新状態を維持する。</li>
+          </ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">基礎</a><a href="#patching" class="underline underline-offset-4">パッチの仕組み</a><a href="#distribution" class="underline underline-offset-4">ソフトウェア配布</a><a href="#operations" class="underline underline-offset-4">実務</a><a href="#case" class="underline underline-offset-4">設問の解説</a></nav>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-6">
+          <div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div>
+          <div class="tb-progress"><div data-progress-bar style="width:0%"></div></div>
+          <p class="mt-2 text-xs text-slate-500">13個の演習の正解状況を、このブラウザに保存します。</p>
+        </div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編</h2><span class="tb-badge is-basic">基礎</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 Systems Managerとは</h3>
+            <div class="ssm-copy"><p>AWS Systems Managerは、EC2やオンプレミス、他クラウドのサーバーをまとめて管理するサービスです。略称はSSMです。正式名称は複数形の「Systems Manager」で、APIやエージェント名には今もSSMという名前が使われています。</p><p>80台へ1台ずつログインする代わりに、タグなどで対象を選び、コマンド実行、パッチ適用、設定の維持、情報収集をまとめて行います。ノードとは管理対象のサーバーを指し、SSMと通信できるようになったものを「管理対象ノード（managed node）」と呼びます。</p></div>
+            <div class="ssm-flow" aria-label="Systems Managerによる集中管理">
+              <div><small>01 対象を選ぶ</small><strong>Applicationタグ</strong><p>例：BatchAggregationに属する80台を指定</p></div>
+              <div><small>02 指示する</small><strong>Systems Manager</strong><p>権限と手順に従い、実行を制御</p></div>
+              <div><small>03 実行する</small><strong>各ノードのSSM Agent</strong><p>OS上でコマンドやパッチ処理を実行</p></div>
+              <div><small>04 確かめる</small><strong>実行結果・準拠状況</strong><p>失敗、未適用、再起動待ちを確認</p></div>
+            </div>
+            <p class="ssm-source">出典：<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/what-is-systems-manager.html" target="_blank" rel="noopener">What is AWS Systems Manager?</a></p>
+            <div data-quiz data-id="ssm-q-overview" data-answer="b" data-explanation="SSMはサーバー群の運用管理をまとめるサービスです。EC2以外のサーバーも、対応する設定で管理できます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q1. Systems Managerの代表的な用途は？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ssm-q1" value="a"><span>ドメイン名を登録する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q1" value="b"><span>複数サーバーの運用作業を集中管理・自動化する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q1" value="c"><span>VPCのCIDRを自動で無制限に増やす</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q1" value="d"><span>EC2の代わりにバッチ処理そのものを実行する</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 主要機能を「やりたいこと」で選ぶ</h3>
+            <div class="ssm-table-wrap"><table class="ssm-table"><thead><tr><th>機能</th><th>主な役割</th><th>使う場面</th></tr></thead><tbody>
+              <tr><td>Run Command</td><td>SSMドキュメントを使ってコマンドを一括実行</td><td>サービス状態の確認、スクリプト配布・実行</td></tr>
+              <tr><td>Session Manager</td><td>ノードへの対話的な接続</td><td>障害調査で1台のシェルを開く</td></tr>
+              <tr><td>Patch Manager</td><td>パッチ選定、適用、準拠状況の管理</td><td>80台へ承認済みのOS更新を適用</td></tr>
+              <tr><td>Maintenance Windows</td><td>作業する時間帯・対象・タスクを定義</td><td>毎週日曜の深夜に保守作業を実行</td></tr>
+              <tr><td>Automation</td><td>複数手順のランブックを実行</td><td>バックアップ→更新→確認などを組み合わせる</td></tr>
+              <tr><td>Distributor</td><td>任意ソフトウェアをパッケージ化し、バージョン管理</td><td>監視エージェントの導入物と更新版を登録</td></tr>
+              <tr><td>State Manager</td><td>関連付け（association）に従い、定義した状態を維持</td><td>必要なソフトウェアや設定を繰り返し適用</td></tr>
+              <tr><td>Inventory / Fleet Manager</td><td>ソフトウェア情報の収集／ノードの確認と操作</td><td>OS、導入パッケージ、ノードの状態を把握</td></tr>
+              <tr><td>Parameter Store</td><td>設定値を名前・階層・バージョンで管理</td><td>/app/prod/api-url やAMI IDを取得</td></tr>
+            </tbody></table></div>
+            <div class="ssm-note"><strong>Parameter Storeの補足：</strong>String・StringList・KMSで暗号化するSecureStringがあります。パスワードやAPIキーなどの秘密情報には、ローテーションなどを備えるSecrets Managerが推奨されます。</div>
+            <p class="ssm-source">出典：<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-tools.html" target="_blank" rel="noopener">Systems Manager tools</a>、<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/documents.html" target="_blank" rel="noopener">SSM Documents</a>、<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html" target="_blank" rel="noopener">Parameter Store</a></p>
+            <div data-quiz data-id="ssm-q-tools" data-answer="c" data-explanation="インバウンドSSHポートや踏み台・SSH鍵を管理せず対話的に接続する用途はSession Managerです。接続先にはSSMの前提条件が必要です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q2. SSHのインバウンドポートを開かず、1台へ対話的に接続したいときは？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ssm-q2" value="a"><span>Patch Manager</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q2" value="b"><span>Parameter Store</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q2" value="c"><span>Session Manager</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q2" value="d"><span>Inventory</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.3 管理対象になるための前提条件</h3>
+            <div class="grid md:grid-cols-3 gap-3 mt-4">
+              <div class="rounded-2xl bg-sky-50 p-5"><p class="text-xs font-bold text-sky-600">AGENT</p><h4 class="font-bold mt-2">SSM Agentが動作</h4><p class="ssm-copy mt-2">対応するOSにエージェントを入れ、起動・更新します。AMIに入っていても動作確認は必要です。</p></div>
+              <div class="rounded-2xl bg-sky-50 p-5"><p class="text-xs font-bold text-sky-600">IAM</p><h4 class="font-bold mt-2">ノードの権限</h4><p class="ssm-copy mt-2">インスタンスプロファイルなどでSSMに通信する権限を付与します。操作者のIAM権限も別に必要です。</p></div>
+              <div class="rounded-2xl bg-sky-50 p-5"><p class="text-xs font-bold text-sky-600">NETWORK</p><h4 class="font-bold mt-2">通信経路</h4><p class="ssm-copy mt-2">HTTPS 443でSSM等へ到達させます。インターネット経路またはVPCエンドポイントを使います。</p></div>
+            </div>
+            <div class="ssm-copy mt-4"><p>インスタンス単位で設定する場合は、IAMロールにAmazonSSMManagedInstanceCoreなど必要なポリシーを付け、インスタンスプロファイルを関連付けます。別の方法として、条件を満たすEC2をアカウント・リージョン単位で管理するDefault Host Management Configurationもあります。</p><p>主な通信先は <code>ssm</code> と <code>ssmmessages</code> です。エージェントやリージョンによって旧来の <code>ec2messages</code> も確認します。SSMとの接続ができても、OSのパッケージリポジトリや必要なS3領域へ到達できなければパッチ処理は失敗します。</p></div>
+            <div class="ssm-note"><strong>同じAMIでも同じ管理状態とは限りません。</strong>起動後のIAMロール、サブネットの経路、Agentの停止などで差が出ます。まず80台すべてが管理対象として認識され、接続できるかを確認します。</div>
+            <p class="ssm-source">出典：<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/setup-instance-permissions.html" target="_blank" rel="noopener">インスタンスの権限</a>、<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/setup-create-vpc.html" target="_blank" rel="noopener">VPCエンドポイントと通信要件</a></p>
+            <div data-fill data-id="ssm-q-agent" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="ssm-copy">ノード上で稼働し、Systems Managerと通信するソフトウェアは <span class="tb-fill"><input data-answer="ssm agent|ssmエージェント|SSM エージェント" aria-label="ノード上で稼働するソフトウェア" placeholder="???"></span> です。</p>
+              <button data-fill-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="patching" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：パッチの仕組み</h2><span class="tb-badge is-applied">応用</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 「何を・誰に・いつ・どう実行するか」を分ける</h3>
+            <div class="ssm-table-wrap"><table class="ssm-table"><thead><tr><th>決めること</th><th>仕組み</th><th>例</th></tr></thead><tbody>
+              <tr><td>何を適用するか</td><td>パッチベースライン</td><td>対象OS、Security分類、重要度、承認までの日数、承認・拒否リスト</td></tr>
+              <tr><td>誰へ適用するか</td><td>タグ、ノードID、リソースグループ</td><td>Application=BatchAggregation のノード群</td></tr>
+              <tr><td>いつ適用するか</td><td>Patch now／Maintenance Windows／パッチポリシー</td><td>緊急適用、週次の保守、組織全体への定期適用</td></tr>
+              <tr><td>何を動かすか</td><td>SSMドキュメント</td><td>AWS-RunPatchBaselineでScanまたはInstall</td></tr>
+            </tbody></table></div>
+            <div class="ssm-copy mt-4"><p>パッチベースラインは、パッチを承認するためのルールです。EC2のAMIやバックアップではありません。OSごとに、どの分類・重要度をいつ承認するかを設定します。OSごとに使えるフィルターや承認ルールは異なります。</p><p>Applicationタグは実行対象の選択に使えますが、そのタグだけでカスタムベースラインが自動的に選ばれるわけではありません。従来方式で既定以外のベースラインを使う場合は、<code>PatchGroup</code>（または <code>Patch Group</code>）という専用タグのグループをベースラインへ関連付けます。パッチポリシー方式では、ポリシー内でOSごとにベースラインを選べます。</p></div>
+            <details class="tb-accordion mt-4"><summary>「今すぐパッチを適用」なら、公開直後のパッチも入る？</summary><div class="tb-accordion-body">「今すぐ」は実行時刻の指定です。ベースラインの承認条件は引き続き適用されます。たとえば公開7日後に承認するルールでは、公開直後の更新が対象にならない場合があります。緊急時は承認ルールや明示的な承認リストも確認します。</div></details>
+            <p class="ssm-source">出典：<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/patch-manager.html" target="_blank" rel="noopener">Patch Managerとベースライン</a>、<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/patch-manager-tag-a-patch-group.html" target="_blank" rel="noopener">パッチグループの関連付け</a></p>
+            <div data-quiz data-id="ssm-q-baseline" data-answer="a,c" data-multiple data-explanation="ベースラインはパッチの承認ルール、タグは実行対象の選択に使います。従来方式のベースライン選択は専用のパッチグループ等、別の設定です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q4. 正しい説明をすべて選んでください。</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="ssm-q4" value="a"><span>ベースラインは「何を承認するか」を定義する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ssm-q4" value="b"><span>Applicationタグを付ければ、専用ベースラインも自動選択される</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ssm-q4" value="c"><span>タグを使って、対象アプリケーションのノードを選べる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ssm-q4" value="d"><span>Patch nowは、ベースラインが承認していない更新も必ず入れる</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 Patch ManagerとRun Commandはどう関係する？</h3>
+            <div class="ssm-copy"><p>Patch Managerは、パッチのルールと準拠状況を扱います。Run Commandは、コマンド型のSSMドキュメントをノードへ実行する仕組みです。Run Commandから <code>AWS-RunPatchBaseline</code> を呼び出して、Patch Managerのルールに基づく処理を実行できます。</p><p>SSMドキュメントは、実行する手順とパラメーターをJSONやYAMLで定義したものです。<code>AWS-RunShellScript</code> は任意のシェルコマンド、<code>AWS-RunPatchBaseline</code> はベースラインに従うパッチ処理に使います。自作スクリプトで更新する方法にも用途はありますが、承認ルール・準拠状況・レポートまで必要ならPatch Managerを軸にします。</p></div>
+            <div class="ssm-table-wrap"><table class="ssm-table"><thead><tr><th>方式</th><th>使いどころ</th><th>押さえる点</th></tr></thead><tbody>
+              <tr><td>Patch now</td><td>今回の緊急適用や単発のScan</td><td>1アカウント・1リージョンの対象を選び、その場で開始</td></tr>
+              <tr><td>Maintenance Windows</td><td>決めた保守時間内で定期実行</td><td>時間帯・対象・タスクを設定。Run Commandタスク等を登録</td></tr>
+              <tr><td>Quick Setupのパッチポリシー</td><td>継続運用、複数アカウント・リージョンの統一管理</td><td>OS別のベースライン、ScanとInstallのスケジュールをまとめて設定</td></tr>
+            </tbody></table></div>
+            <div class="ssm-note"><strong>設問と現在の実務：</strong>画像では「Patch Manager＋即時適用＋Maintenance Windows」が適切です。現在AWSは継続的な設定にはパッチポリシーを推奨しています。Patch nowはパッチポリシーを直接実行する操作ではなく、別のオンデマンド経路です。複数の経路を併用する場合は、使用ベースラインの違いに注意します。</div>
+            <p class="ssm-source">出典：<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/documents.html" target="_blank" rel="noopener">SSM Documents</a>、<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/patch-manager-patch-now-on-demand.html" target="_blank" rel="noopener">Patch now</a>、<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/patch-manager-policies.html" target="_blank" rel="noopener">Quick Setupのパッチポリシー</a></p>
+            <div data-quiz data-id="ssm-q-command" data-answer="b" data-explanation="Patch Managerのベースラインを利用し、Run CommandからAWS-RunPatchBaselineを実行するのは正しい組み合わせです。Run Command自体にベースラインを作る機能があるわけではありません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q5. 正しい組み合わせは？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ssm-q5" value="a"><span>Run Commandでパッチベースラインを作る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q5" value="b"><span>Patch Managerでルールを管理し、Run Commandからパッチ用ドキュメントを実行できる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q5" value="c"><span>Session Managerが全ノードを定期パッチする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q5" value="d"><span>Maintenance WindowsがOS別の承認ルールを定義する</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.3 80台で体験する：Scan → Install → 再確認</h3>
+            <div class="ssm-copy"><p><strong>Scan</strong>は不足する承認済みパッチを調べ、準拠状況を報告します。パッチのインストールや再起動は行いません。<strong>Install</strong>は承認済みで対象ノードに必要な更新を適用します。</p><p>再起動が必要な更新では、インストールしただけで変更が有効になるとは限りません。<code>NoReboot</code>は再起動を後回しにする設定です。再起動とその後の状態確認までを作業計画に含めます。</p></div>
+            <div data-patch-fleet class="patch-fleet mt-5">
+              <h4 class="font-bold text-sky-900">80台のパッチ適用シミュレーター</h4>
+              <p class="text-xs text-slate-500 mt-2 mb-4 leading-relaxed">学習用の固定データです。再起動が必要な更新を想定し、2台は接続できない状態とします。実際のAWSへの操作は行いません。</p>
+              <div class="patch-fleet-controls"><button type="button" data-patch-action="scan">① Scan</button><button type="button" data-patch-action="install" disabled>② Install（再起動なし）</button><button type="button" data-patch-action="reboot" disabled>③ 再起動・再スキャン</button><button type="button" data-patch-action="reset">最初に戻す</button></div>
+              <div class="patch-fleet-stats"><div><strong data-patch-count="ok">0</strong>準拠</div><div><strong data-patch-count="missing">0</strong>未適用</div><div><strong data-patch-count="pending">0</strong>再起動待ち</div><div><strong data-patch-count="unknown">80</strong>未評価</div></div>
+              <div data-patch-grid class="patch-grid" aria-label="対象80台の状態"></div>
+              <p class="text-xs text-slate-500 mt-3">緑＝準拠／橙＝未適用／青紫＝再起動待ち／灰＝未評価。各タイルの説明にも状態を表示します。</p>
+              <div data-patch-result class="patch-fleet-result" aria-live="polite">Scanを実行してください。</div>
+            </div>
+            <p class="ssm-source">出典：<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/patch-manager-aws-runpatchbaseline.html" target="_blank" rel="noopener">AWS-RunPatchBaselineの操作と再起動設定</a></p>
+            <div data-quiz data-id="ssm-q-reboot" data-answer="d" data-explanation="Missingが0でも、再起動待ちや未評価のノードが残る場合があります。対象全体、実行結果、準拠状況、アプリの健全性を合わせて確認します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q6. シミュレーターで78台が準拠、2台が未評価でした。適切な報告は？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ssm-q6" value="a"><span>80台すべて完了</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q6" value="b"><span>Scanだけで全パッチを適用済み</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q6" value="c"><span>未評価の2台も準拠として数える</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q6" value="d"><span>78台の準拠を確認。残る2台は接続復旧と再評価が必要</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="distribution" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：ソフトウェア配布と状態維持</h2><span class="tb-badge is-applied">応用</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 DistributorとState Managerの役割を分ける</h3>
+            <div class="ssm-copy"><p>サードパーティ製の監視エージェントは、OSパッチではありません。インストーラー、対応OS・CPU、インストール／アンインストール手順、バージョンを<strong>Distributorパッケージ</strong>として管理します。Distributorは「何を配るか」を担当します。</p><p>そのパッケージを、どのノードへ、いつ、どの状態になるよう適用するかは<strong>State Managerの関連付け</strong>で定義します。関連付けが実行するAWS管理ドキュメントは <code>AWS-ConfigureAWSPackage</code> です。つまり、Distributorだけを作っても自動配布は始まらず、State Managerだけでは配布物のライフサイクル管理が不足します。</p></div>
+            <div class="ssm-flow" aria-label="DistributorとState Managerによるエージェント配布">
+              <div><small>01 PACKAGE</small><strong>Distributor</strong><p>実行ファイル、スクリプト、マニフェスト、バージョン</p></div>
+              <div><small>02 DESIRED STATE</small><strong>State Manager</strong><p>関連付け、タグ、スケジュール、レート制御</p></div>
+              <div><small>03 EXECUTE</small><strong>AWS-ConfigureAWSPackage</strong><p>Install／Uninstall、完全再導入／インプレース更新</p></div>
+              <div><small>04 TARGET</small><strong>Linux管理対象ノード</strong><p>既存ノードと、後からタグ条件を満たす新規ノード</p></div>
+            </div>
+            <div class="ssm-table-wrap"><table class="ssm-table"><thead><tr><th>機能</th><th>できること</th><th>今回の位置付け</th></tr></thead><tbody>
+              <tr><td>Distributor</td><td>パッケージ作成、対応プラットフォーム、ハッシュ、バージョンの管理</td><td>セキュリティエージェントを配布可能な形にする</td></tr>
+              <tr><td>State Manager</td><td>関連付けを対象へ即時・定期適用し、望ましい状態を維持</td><td>タグ対象へインストールと更新を繰り返す</td></tr>
+              <tr><td>Inventory</td><td>インストール済みアプリケーションなどの構成情報を収集</td><td>確認には使えるが、配布はしない</td></tr>
+              <tr><td>OpsCenter / OpsItem</td><td>運用上の問題を記録し、調査・対応を追跡</td><td>チケット管理であり、配布はしない</td></tr>
+              <tr><td>Run Command</td><td>ドキュメントやスクリプトを一度実行</td><td>単発導入には使えるが、状態維持はState Managerが適切</td></tr>
+            </tbody></table></div>
+            <p class="ssm-source">出典：<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/distributor.html" target="_blank" rel="noopener">Systems Manager Distributor</a>、<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/state-manager-about.html" target="_blank" rel="noopener">State Managerの仕組み</a></p>
+            <div data-quiz data-id="ssm-q-distributor-role" data-answer="a" data-explanation="Distributorが配布物とバージョンを管理し、State Manager関連付けが対象・タイミング・望ましい状態を定義します。InventoryやOpsItemは配布機能ではありません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q11. 正しい役割分担は？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ssm-q11" value="a"><span>Distributorでパッケージを管理し、State Managerで継続適用する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q11" value="b"><span>Inventoryでパッケージを配り、OpsItemでインストールする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q11" value="c"><span>Session Managerが新規EC2を検出して自動導入する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q11" value="d"><span>Patch Managerのベースラインにサードパーティ製アプリを登録する</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 パッケージ化と更新方式を設計する</h3>
+            <div class="ssm-copy"><p>Linux向けの高度なパッケージ作成では、インストーラーと <code>install.sh</code>、<code>uninstall.sh</code> をZIPにまとめ、対応プラットフォーム・アーキテクチャ・ファイルのSHA-256・パッケージバージョンをJSONマニフェストへ記述します。コンソールのSimpleワークフローでは、インストール／アンインストールスクリプトやハッシュ、マニフェストを生成できます。</p><p>更新方式は可用性に直結します。既定の <strong>Uninstall and reinstall</strong> はいったん旧版を削除して再導入するため、その間エージェントは停止します。<strong>In-place update</strong> は新規・変更ファイルだけを更新でき、アプリケーションを稼働させたまま更新できますが、パッケージに <code>update.sh</code> を用意する必要があります。ベンダーの対応手順を検証し、無条件にインプレース更新へ切り替えないようにします。</p></div>
+            <div class="grid sm:grid-cols-3 gap-4 mt-4">
+              <div class="rounded-2xl bg-sky-50 p-5"><p class="text-xs font-bold text-sky-600">VERSION</p><h4 class="font-bold mt-2">更新版を追加</h4><p class="ssm-copy mt-2">人が判別できるバージョンを付け、旧版も追跡できるようにします。</p></div>
+              <div class="rounded-2xl bg-sky-50 p-5"><p class="text-xs font-bold text-sky-600">LATEST OR PIN</p><h4 class="font-bold mt-2">追従か固定か</h4><p class="ssm-copy mt-2">Versionを省略すれば最新公開版、指定すれば検証済みの特定版を導入します。</p></div>
+              <div class="rounded-2xl bg-sky-50 p-5"><p class="text-xs font-bold text-sky-600">ROLLBACK</p><h4 class="font-bold mt-2">戻し方も検証</h4><p class="ssm-copy mt-2">旧版への再導入、サービス再起動、設定ファイルの互換性を事前確認します。</p></div>
+            </div>
+            <div class="ssm-note"><strong>「最新版を公開したら即時に全台更新」とは限りません。</strong>State Managerは関連付けの作成・更新、対象ノードの追加、スケジュール、手動実行などを契機に動きます。緊急更新は新バージョンを登録した後、検証対象で確認し、関連付けを手動実行または更新して段階的に広げます。</div>
+            <details class="tb-accordion mt-4"><summary>AWS-RunRemoteScriptではなぜ不十分？</summary><div class="tb-accordion-body"><code>AWS-RunRemoteScript</code>はS3やGitHub上のスクリプトを取得して実行する汎用ドキュメントです。独自処理には便利ですが、Distributorのパッケージバージョンやインストール／アンインストール処理を直接扱うものではありません。Distributorパッケージの導入・更新には、専用の<code>AWS-ConfigureAWSPackage</code>を選びます。</div></details>
+            <p class="ssm-source">出典：<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/distributor-working-with-packages-create.html" target="_blank" rel="noopener">Distributorパッケージの作成</a>、<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/distributor-working-with-packages-version.html" target="_blank" rel="noopener">パッケージバージョンの追加</a>、<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/distributor-working-with-packages-deploy.html" target="_blank" rel="noopener">パッケージの導入・更新</a></p>
+            <div data-quiz data-id="ssm-q-agent-choice" data-answer="b,e" data-multiple data-explanation="正解は、Distributorパッケージの作成と、AWS-ConfigureAWSPackageを使うタグ対象のState Manager関連付けです。OpsItem・Inventory・AWS-RunRemoteScriptは、Distributorパッケージの継続配布を担いません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q12. すべてのLinux EC2へ監視エージェントを導入・更新する最小運用の手順を2つ選んでください。</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="ssm-q12" value="a"><span>各インスタンスへログインするLambdaを自作する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ssm-q12" value="b"><span>エージェント用のDistributorパッケージを作成する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ssm-q12" value="c"><span>OpsItemにタグを記録し、Inventoryを関連付ける</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ssm-q12" value="d"><span>AWS-RunRemoteScriptでDistributorパッケージを管理する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ssm-q12" value="e"><span>AWS-ConfigureAWSPackageを使うState Manager関連付けをタグ対象で作る</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.3 タグで既存・新規ノードへ継続適用する</h3>
+            <div class="ssm-copy"><p>State Manager関連付けのTargetに、たとえば <code>Platform=Linux</code> といったタグ条件を指定します。CommandまたはPolicyドキュメントを使う関連付けでは、後から条件に一致する新しい管理対象ノードが追加されると、State Managerが関連付けを自動適用し、既定ではすぐに実行した後、設定したスケジュールでも実行します。対象タグを外すと、そのノードは以後の実行対象から外れます。</p><p>関連付けはアカウントとリージョンの範囲で考えます。複数リージョンや複数アカウントへ広げる場合は、それぞれに設定を展開するか、Systems Manager Quick SetupでDistributorパッケージを組織へ展開します。パッケージを別アカウントで更新しても、他アカウントの関連付けが自動実行されるわけではありません。</p></div>
+            <pre class="tb-code mt-5"><code># 学習用の構成例。実環境のパッケージ名・タグ・間隔へ置換
+aws ssm create-association \
+  --name AWS-ConfigureAWSPackage \
+  --parameters '{"action":["Install"],"installationType":["In-place update"],"name":["SecurityAgent"]}' \
+  --targets 'Key=tag:Platform,Values=Linux' \
+  --schedule-expression 'rate(1 hour)' \
+  --max-concurrency '10%' \
+  --max-errors '1' \
+  --region ap-northeast-1</code></pre>
+            <div class="ssm-table-wrap"><table class="ssm-table"><thead><tr><th>設定</th><th>目的</th><th>実務上の確認</th></tr></thead><tbody>
+              <tr><td>タグターゲット</td><td>インスタンスIDの列挙をなくす</td><td>キー・値・大文字小文字と、タグ付与の自動化</td></tr>
+              <tr><td>スケジュール</td><td>欠落や更新を定期的に是正</td><td>速やかな展開要件に合う間隔、重複実行の回避</td></tr>
+              <tr><td>Concurrency</td><td>同時更新台数を制限</td><td>検証タグ→少数本番→全体の順で段階展開</td></tr>
+              <tr><td>Error threshold</td><td>失敗時に新たな配信を止める</td><td>自動ロールバックではないため、復旧手順を別に用意</td></tr>
+              <tr><td>実行状態・出力</td><td>成功、失敗、未到達を把握</td><td>Association historyと対象台帳を照合</td></tr>
+            </tbody></table></div>
+            <div class="ssm-note"><strong>前提条件を忘れない：</strong>タグが付いていても、SSM Agent、ノード用IAM権限、SSMとパッケージ取得先へのHTTPS経路がなければ実行できません。また、関連付けを作成できる主体は対象ノード上で高い権限の処理を実行できるため、最小権限で管理します。</div>
+            <p class="ssm-source">出典：<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-state-manager-targets-and-rate-controls.html" target="_blank" rel="noopener">State Managerのターゲットとレート制御</a>、<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/distributor-working-with-packages-deploy.html" target="_blank" rel="noopener">タグ対象へのパッケージ配布</a>、<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/quick-setup-distributor.html" target="_blank" rel="noopener">Quick Setupによる組織展開</a></p>
+            <div class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q13. 安全な更新展開の順に並べ替えてください。</p>
+              <ul data-sortable data-id="ssm-q-agent-rollout" data-answer="package,test,pilot,rollout,verify" class="tb-sortable"><li data-id="rollout">レート制御付きの本番関連付けを実行する</li><li data-id="verify">関連付け履歴と対象台帳を照合し、失敗・未到達を確認する</li><li data-id="package">更新版を新しいDistributorパッケージバージョンとして登録する</li><li data-id="pilot">本番の少数タグ対象へ段階適用する</li><li data-id="test">検証環境で導入・更新・ロールバックを確認する</li></ul>
+              <p data-sortable-feedback class="text-sm text-slate-500 mt-3">ドラッグまたは矢印ボタンで変更すると判定します。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="operations" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編</h2><span class="tb-badge is-prac">実務</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.1 80台へ適用する運用を組み立てる</h3>
+            <div class="ssm-copy"><p>まずタグと対象台数を突き合わせ、SSMから全台を管理できる状態にします。次にOSに合うベースラインを決め、Scanで現状を調べます。検証用ノードと本番の少数台で動作を確認してから、残りへ広げます。</p><p>バッチ処理を実行中なら、新規ジョブの受付停止や実行中ジョブの完了待ちを手順に入れます。再起動の可否、失敗時の復旧方法、更新前のバックアップも決めます。同じAMIから構築されていても、検証を省略する根拠にはなりません。</p></div>
+            <div class="grid sm:grid-cols-2 gap-4 mt-4">
+              <div class="rounded-2xl bg-sky-50 p-5"><h4 class="font-bold">同時実行数</h4><p class="ssm-copy mt-2">Maintenance WindowsのRun Commandタスク等ではMaxConcurrencyを台数・割合で指定できます。たとえば10%は80台中およそ8台を上限にする設定です。</p></div>
+              <div class="rounded-2xl bg-sky-50 p-5"><h4 class="font-bold">エラーしきい値</h4><p class="ssm-copy mt-2">MaxErrorsで、新たな対象への配信を止める目安を指定します。すでに実行中の処理は完了することがあり、失敗数の厳密な上限や自動ロールバックではありません。</p></div>
+            </div>
+            <div class="ssm-note"><strong>Patch nowとの違い：</strong>Patch nowの同時実行数とエラーしきい値はPatch Managerが管理します。細かな実行制御が必要ならMaintenance Windows等の対応する経路を選びます。保守時間の終了も、実行中の更新を必ず強制停止する保証にはなりません。</div>
+            <p class="ssm-source">出典：<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/send-commands-multiple.html" target="_blank" rel="noopener">Run Commandの対象とレート制御</a>、<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/patch-manager-patch-now-on-demand.html" target="_blank" rel="noopener">Patch nowの実行制御</a></p>
+            <div class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q7. 適切な順に並べ替えてください。</p>
+              <ul data-sortable data-id="ssm-q-rollout" data-answer="ready,baseline,pilot,deploy,verify" class="tb-sortable"><li data-id="deploy">保守時間に残りのノードへ段階的に適用する</li><li data-id="ready">対象タグ・80台の管理状態・復旧方法を確認する</li><li data-id="verify">実行結果・準拠状況・再起動・アプリの健全性を確認する</li><li data-id="baseline">ベースラインを決め、Scanで不足を確認する</li><li data-id="pilot">検証環境と少数の本番ノードで動作確認する</li></ul>
+              <p data-sortable-feedback class="text-sm text-slate-500 mt-3">ドラッグまたは矢印ボタンで変更すると判定します。</p>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.2 各インスタンスの適用状況をレポートする</h3>
+            <div class="ssm-copy"><p>「コマンドが終了したか」と「必要なパッチが入ったか」は、確認する情報が異なります。実行結果で失敗やタイムアウトを調べ、Patch Managerのコンプライアンス情報でノードごとの不足・失敗・再起動待ちを確認します。最後にバッチ処理が正常に動くかを確かめます。</p><p>準拠（Compliant）は、使用したベースラインの基準を満たすという意味です。すべての脆弱性がないことを保証する状態ではありません。レポートを見る際は、対象台数、評価時刻、使用ベースラインをセットで記録します。</p></div>
+            <div class="ssm-table-wrap"><table class="ssm-table"><thead><tr><th>確認項目</th><th>判断すること</th></tr></thead><tbody><tr><td>インスタンスID・対象タグ</td><td>期待した80台が集計対象に含まれているか</td></tr><tr><td>Missing / Failed</td><td>承認済みパッチの不足やインストール失敗があるか</td></tr><tr><td>InstalledPendingReboot</td><td>変更を有効化するための再起動が残っていないか</td></tr><tr><td>評価時刻・ベースラインID</td><td>今回の作業で、意図したルールを使った結果か</td></tr><tr><td>未報告・通信不能ノード</td><td>成功したノードだけを見て完了と誤認していないか</td></tr></tbody></table></div>
+            <details class="tb-accordion mt-4"><summary>レポートはCSVとして残せる？</summary><div class="tb-accordion-body">Patch ManagerのCompliance reportingからS3へCSV出力できます。全ノード向けはノード別の非準拠パッチ数などの集計、単一ノード向けはパッチ名やIDまでの詳細を扱います。レポート出力は単発またはスケジュール設定が可能です。出力先S3やKMSの権限も設定します。</div></details>
+            <pre class="tb-code mt-5"><code># 管理対象ノードと接続状態を確認（参照操作）
+aws ssm describe-instance-information --region ap-northeast-1
+
+# 1台のパッチ集計を確認。IDは実環境の値へ置換
+aws ssm describe-instance-patch-states \
+  --instance-ids i-0123456789abcdef0 \
+  --region ap-northeast-1
+
+# Run Commandで実行した処理のノード別結果を確認
+aws ssm list-command-invocations \
+  --command-id &lt;COMMAND_ID&gt; --details \
+  --region ap-northeast-1</code></pre>
+            <div class="ssm-note"><strong>レポートはその時点の状態です。</strong>最新の成功したScan等が準拠情報を更新します。別ベースラインで手動Scanすると以前の結果を上書きすることがあるため、ベースラインIDと取得時刻を確認してください。未報告ノードはEC2の対象台帳とも照合します。</div>
+            <p class="ssm-source">出典：<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/patch-manager-compliance-reports.html" target="_blank" rel="noopener">準拠レポートの扱い</a>、<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/patch-manager-store-compliance-results-in-s3.html" target="_blank" rel="noopener">S3へのCSV出力</a></p>
+            <div data-quiz data-id="ssm-q-report" data-answer="a,c,d" data-multiple data-explanation="準拠状況は使用ベースラインと評価時刻に依存します。ノード別の結果と未報告ノードも確認します。準拠はあらゆる脅威に対する安全の証明ではありません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q8. 作業完了レポートで確認する項目をすべて選んでください。</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="ssm-q8" value="a"><span>ノードごとのパッチ状態と再起動待ち</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ssm-q8" value="b"><span>Compliantなら全脆弱性が存在しないと断定する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ssm-q8" value="c"><span>使用ベースラインと評価時刻</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ssm-q8" value="d"><span>対象80台のうち未報告・通信不能のノードがないか</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.3 よくある失敗と、調査時の接続</h3>
+            <div class="ssm-table-wrap"><table class="ssm-table"><thead><tr><th>症状</th><th>主な確認箇所</th></tr></thead><tbody><tr><td>SSMにノードが表示されない</td><td>対象アカウント・リージョン、Agentの動作、ノード権限、DNS・HTTPS経路</td></tr><tr><td>80台の一部だけ対象にならない</td><td>タグのキー・値・大文字小文字、ノードの登録状態、実行時のターゲット条件</td></tr><tr><td>Scan成功だが更新されない</td><td>Scanは検査のみ。Installを実行したか、更新が承認条件に合うか</td></tr><tr><td>更新の取得に失敗する</td><td>リポジトリや必要なS3への経路、OSのサポート状況、実行ログ</td></tr><tr><td>インストール後も非準拠</td><td>失敗パッチ、再起動待ち、ベースラインの違い、評価時刻</td></tr></tbody></table></div>
+            <div class="ssm-copy mt-4"><p>ノード内での調査にはSession Managerを使えます。対話的な接続にも、実行者のIAM権限、SSM Agent、ノードの権限と通信経路が必要です。ノードへのインバウンド22番ポートを開く必要はありません。</p><p>通常のシェルセッションの入出力は、設定によりCloudWatch LogsやS3へ保存できます。CloudTrailのAPI操作記録と、シェルで実行した内容の記録は別です。また、ポートフォワーディングやSSHトンネルのセッション内容は記録できません。</p></div>
+            <p class="ssm-source">出典：<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html" target="_blank" rel="noopener">Session Managerの接続とログ</a>、<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/setup-create-vpc.html" target="_blank" rel="noopener">通信要件</a></p>
+            <div data-quiz data-id="ssm-q-network" data-answer="b" data-explanation="SSMの接続にはAgent・権限・SSM等への到達性が必要です。SSMのVPCエンドポイントだけではOSの更新リポジトリへの到達性は自動的に確保されません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q9. SSMには接続できるのに、パッチのダウンロードが失敗します。次に見るのは？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ssm-q9" value="a"><span>すべてのノードでSSH 22番を公開する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q9" value="b"><span>OSリポジトリや必要なS3領域への到達性と実行ログ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q9" value="c"><span>Applicationタグを削除する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q9" value="d"><span>パッチベースラインをAMIとして起動する</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">5</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：今回の設問を解く</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <h3 class="text-lg font-bold text-sky-900 mb-3">80台・今後も自動化・各ノードのレポート</h3>
+          <div class="ssm-copy"><p>問題は、OSパッチの今回の自動適用、今後の作業自動化、インスタンス別の適用状況レポートを求めています。この3つをまとめて扱う中心機能がPatch Managerです。</p></div>
+          <div class="ssm-table-wrap"><table class="ssm-table"><thead><tr><th>選択肢</th><th>判断</th><th>理由</th></tr></thead><tbody><tr><td>1. 自作スクリプト＋Run Commandを都度実行</td><td>最適ではない</td><td>単発実行は可能ですが、今後の定期適用・承認管理・レポートを追加設計する必要があります。</td></tr><tr><td>2. Run Commandでベースラインを作成</td><td>誤り</td><td>ベースラインの管理主体とPatch nowの機能が不正確です。Run Commandは実行機能です。</td></tr><tr><td>3. Patch Manager＋Patch now＋Maintenance Windows</td><td>正解</td><td>パッチ選定、今回の適用、今後の定期実行を組み合わせ、準拠レポートも取得できます。</td></tr><tr><td>4. 1台ずつSSHし、手動で記録</td><td>要件を満たさない</td><td>継続的な自動化と集中管理の要件に合いません。</td></tr></tbody></table></div>
+          <div class="ssm-note"><strong>選択肢3を実装するときの補足：</strong>Applicationタグは80台の実行対象を選ぶために使います。カスタムベースラインを選ばせる従来方式では、別途 <code>PatchGroup</code> タグとベースラインの関連付けが必要です。「全インスタンスへ即時適用」は今すぐ処理を開始する意味で、80台を同時に再起動する意味ではありません。定期実行後も、失敗や未報告ノードへの対処は必要です。</div>
+          <div class="ssm-note"><strong>試験解答と現在の推奨構成を分ける：</strong>提示された選択肢では、Patch Manager、Patch now、Maintenance Windowsを組み合わせる3番目が正解です。一方、現在AWSは継続的なパッチ運用にQuick Setupのパッチポリシーを推奨しています。特に複数アカウント・複数リージョンでは、ScanとInstallのスケジュール、OS別ベースライン、対象範囲を一元設定できるパッチポリシーを優先して検討します。</div>
+          <div data-quiz data-id="ssm-q-final" data-answer="c" data-explanation="パッチの承認ルールと適用状況をPatch Managerで管理し、即時の適用と定期実行を組み合わせます。Run Commandからパッチ用ドキュメントを実行することもありますが、ベースラインを作る機能ではありません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+            <p class="font-semibold mb-3">Q10. 要件を最も直接的に満たす構成は？</p>
+            <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="ssm-q10" value="a"><span>Session Managerで80台へ入り、毎回手動更新する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q10" value="b"><span>Run Commandでパッチベースラインを作る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q10" value="c"><span>Patch Managerのベースラインと即時適用を使い、Maintenance Windowsで定期化し、準拠状況を報告する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="ssm-q10" value="d"><span>Inventoryでソフトウェア一覧を取るだけにする</span></label></li></ul>
+            <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+          </div>
+        </div>
+        <div class="tb-card p-5 sm:p-7 mt-8">
+          <h3 class="text-lg font-bold text-sky-900 mb-3">全Linux EC2・監視エージェント・更新版を速やかに展開</h3>
+          <div class="ssm-copy"><p>この設問は「配布物を管理する仕組み」と「望ましい状態を継続適用する仕組み」を2つ選ばせています。正解は、サードパーティ製エージェントの<strong>Distributorパッケージを作成</strong>し、<code>AWS-ConfigureAWSPackage</code> を使う<strong>State Manager関連付けをLinuxタグ対象で作成</strong>する組み合わせです。</p></div>
+          <div class="ssm-table-wrap"><table class="ssm-table"><thead><tr><th>選択肢</th><th>判断</th><th>理由</th></tr></thead><tbody>
+            <tr><td>Lambdaで各インスタンスへログイン</td><td>不正解</td><td>接続、認証、再試行、対象発見を自作するため、管理負荷が増えます。</td></tr>
+            <tr><td>Distributorパッケージを作成</td><td>正解</td><td>導入物、スクリプト、対応環境、バージョンを一元管理できます。</td></tr>
+            <tr><td>OpsItem＋Inventory</td><td>不正解</td><td>OpsItemは問題追跡、Inventoryは構成収集であり、ソフトウェアを配布しません。</td></tr>
+            <tr><td>AWS-RunRemoteScriptを関連付け</td><td>不正解</td><td>任意スクリプトの実行用で、Distributorのパッケージ管理とは統合されません。</td></tr>
+            <tr><td>AWS-ConfigureAWSPackage＋タグ対象</td><td>正解</td><td>Distributorパッケージの導入・更新に特化し、新しい対象ノードにも継続適用できます。</td></tr>
+          </tbody></table></div>
+          <div class="ssm-note"><strong>試験解答から実装へ：</strong>本番ではタグ付与の強制、検証用の対象グループ、同時実行数、エラーしきい値、更新方式、バージョン固定／最新版追従、ロールバックを追加設計します。Inventoryは正解の代わりではありませんが、導入後の確認材料として併用できます。</div>
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">6</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">次のステップ</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <h3 class="text-lg font-bold text-sky-900">設問の構成を、現在の実環境へ当てはめるなら</h3>
+          <p class="ssm-copy mt-3">Amazon Linux 2は2026年6月30日にEOLを迎えています。パッチ適用の仕組みを整えるとともに、Amazon Linux 2023などのサポート中のOSへの移行を計画します。Patch Managerの通常のパッチ適用はOSのメジャーバージョン移行を代行しません。</p>
+          <p class="ssm-source">出典：<a href="https://docs.aws.amazon.com/AL2/latest/relnotes/relnotes-20260825.html" target="_blank" rel="noopener">Amazon Linux 2のEOL告知</a>、<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/patch-manager.html" target="_blank" rel="noopener">Patch Managerの対応範囲</a></p>
+          <div class="grid sm:grid-cols-2 gap-5 mt-6">
+            <div class="rounded-2xl bg-sky-50 p-5"><h4 class="font-bold">次に確認する公式ドキュメント</h4><ul class="mt-3 text-sm text-sky-700 space-y-3"><li><a class="underline" href="https://docs.aws.amazon.com/systems-manager/latest/userguide/what-is-systems-manager.html" target="_blank" rel="noopener">Systems Managerの概要</a></li><li><a class="underline" href="https://docs.aws.amazon.com/systems-manager/latest/userguide/patch-manager-policies.html" target="_blank" rel="noopener">Quick Setupのパッチポリシー</a></li><li><a class="underline" href="https://docs.aws.amazon.com/systems-manager/latest/userguide/distributor-working-with-packages-deploy.html" target="_blank" rel="noopener">Distributorパッケージの導入・更新</a></li><li><a class="underline" href="https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-state-manager-targets-and-rate-controls.html" target="_blank" rel="noopener">State Managerのターゲットとレート制御</a></li></ul></div>
+            <div class="rounded-2xl bg-sky-50 p-5"><h4 class="font-bold">関連する教材</h4><ul class="mt-3 text-sm text-sky-700 space-y-3"><li><a class="underline" href="vpc-flow-logs.html">VPCフローログ：通信経路の調査</a></li><li><a class="underline" href="service-quotas.html">Service Quotas：リソース上限の確認</a></li><li><a class="underline" href="elasticache.html">ElastiCache：マネージドキャッシュの運用</a></li></ul></div>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 leading-relaxed mt-5">2026年10月30日にAWS公式資料を確認。教材の操作はブラウザ内のデモです。AWSのコンソール項目や利用条件は更新されるため、実環境では対応OS・リージョン・実行方式の最新情報を確認してください。</p>
+      </section>
+      <section id="agent-and-event-automation" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">+</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">追加演習：CloudWatch Agentの統一とイベント自動化</h2></div>
+        <div class="space-y-5">
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">全台を同じAgent設定へ継続収束させる</h3><p class="ct-copy mt-3">共通設定JSONをParameter Storeへ保存し、<code>AmazonCloudWatch-ManageAgent</code>を使うState Manager関連付けで<code>AppTier=Backend</code>などのタグを対象にします。単発のRun Commandではなく関連付けにすることで、設定ドリフトと新規参加インスタンスにも継続適用できます。Ubuntu数百台への一括導入も、個別ウィザードではなく同じ構成を参照させます。</p></div>
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">一部のWindowsだけへDHCPログ設定を追加する</h3><p class="ct-copy mt-3">ベースラインは<code>fetch-config</code>で維持し、対象35台だけに別名の追加設定を<code>append-config</code>で適用します。同名設定を使うと上書きになるためファイル名／Parameter名を分け、Run Commandで一括実行します。</p><p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/create-cloudwatch-agent-configuration-file.html" target="_blank" rel="noopener">CloudWatch Agentの複数設定ファイル</a></p></div>
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">NACL変更からJira起票まで</h3><p class="ct-copy mt-3">EventBridgeでCloudTrail由来の<code>CreateNetworkAclEntry</code>、<code>ReplaceNetworkAclEntry</code>、<code>DeleteNetworkAclEntry</code>を検出し、Systems Manager Automationランブックを起動します。ランブック内で承認済みWebhook／API呼び出しを標準化し、認証情報はSecrets Managerへ置きます。EC2上の20分ポーリングより、イベント駆動で実行基盤の保守を減らせます。</p></div>
+        </div>
+        <div data-quiz data-multiple data-id="ssm-q14" data-answer="a,d" data-explanation="設定はParameter Storeへ集約し、タグ対象のState Manager関連付けで継続適用します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q14. CloudWatch Agent設定を今後の追加インスタンスにも統一する手順を2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="ssm-q14" value="a"><span>設定JSONをParameter Storeへ保存</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ssm-q14" value="b"><span>各インスタンスでウィザードを手動実行</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ssm-q14" value="c"><span>AppConfigだけに保存</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="ssm-q14" value="d"><span>タグ対象のState Manager関連付けを作成</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+      </section>
+    </article>
+  </main>
+  <script src="../../../assets/shared.js?v=20261030-1"></script>
+</body>
+</html>

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ja" data-topic-id="cloud-aws-auto-scaling">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Amazon EC2 Auto Scalingの起動テンプレート、最小・希望・最大キャパシティ、ターゲット追跡、ヘルスチェック、ALB連携、Instance Refreshを学ぶ通常版教材。">
+  <title>Amazon EC2 Auto Scaling | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"Auto Scaling"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">通常版 · 約40分</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">Amazon EC2<span class="block sm:inline"> Auto Scaling</span></h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">同じ構成のEC2を必要な台数だけ保ち、負荷に合わせて増減する。CPU 65%を保つ設問から、設定と運用をひとつずつ理解します。</p>
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">画像の設問から学ぶ</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">正解は3番目：起動テンプレート＋ターゲット追跡スケーリングです。</p>
+          <p class="ct-copy mt-2">起動テンプレートでAMI、インスタンスタイプ、セキュリティグループなどを揃えます。ターゲット追跡ポリシーに平均CPU 65%を設定すると、Auto Scalingが目標に近づくよう台数を調整します。</p>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500"><li>起動テンプレートとAuto Scalingグループ（ASG）の担当範囲を分ける。</li><li>最小・希望・最大キャパシティとターゲット追跡の動きを説明する。</li><li>ALBのヘルスチェック、インスタンスウォームアップ、Instance Refreshを設計する。</li></ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">基礎</a><a href="#tracking" class="underline underline-offset-4">台数シミュレーター</a><a href="#health" class="underline underline-offset-4">ALB・正常性</a><a href="#operations" class="underline underline-offset-4">更新・運用</a><a href="#case" class="underline underline-offset-4">設問の解説</a></nav>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-6"><div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div><div class="tb-progress"><div data-progress-bar style="width:0%"></div></div><p class="mt-2 text-xs text-slate-500">10問の正解状況を、このブラウザに保存します。</p></div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編：同じ構成を、必要な台数だけ</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 Auto Scalingグループの2つの仕事</h3>
+            <div class="ct-copy"><p>Amazon EC2 Auto Scalingは、Auto Scalingグループ（ASG）でEC2インスタンスをまとめて管理します。ASGには「必要な台数を保つ」仕事と、「負荷や予定に応じて台数を変える」仕事があります。</p><p>稼働中のインスタンスが異常になったり手動で終了されたりして希望台数を下回ると、ASGは代替インスタンスを起動して希望台数を回復します。この自己修復は、負荷による動的スケーリングとは別の基本動作です。</p></div>
+            <div class="ct-flow" aria-label="Auto Scalingの基本動作"><div><small>01 監視</small><strong>現在の台数と正常性</strong><p>希望台数を満たしているかを継続的に確認</p></div><div><small>02 判断</small><strong>維持・スケールアウト・イン</strong><p>正常性やスケーリングポリシーから必要数を判断</p></div><div><small>03 実行</small><strong>EC2を起動・終了</strong><p>起動テンプレートを使い、グループの台数を調整</p></div></div>
+            <div class="ct-note"><strong>Auto Scalingはアプリの処理を高速化する機能そのものではありません。</strong>同じ役割のインスタンスを複数用意できるよう、アプリをステートレスにし、セッションや重要データを外部へ保存する設計が重要です。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/autoscaling/ec2/userguide/what-is-amazon-ec2-auto-scaling.html" target="_blank" rel="noopener">Amazon EC2 Auto Scalingとは</a>、<a href="https://docs.aws.amazon.com/autoscaling/ec2/userguide/ec2-auto-scaling-health-checks.html" target="_blank" rel="noopener">正常性と置換</a></p>
+            <div data-quiz data-id="asg-q1" data-answer="c" data-explanation="希望台数を下回れば代替を起動して回復します。これは動的スケーリングを設定していなくても、ASGが台数を維持する基本動作です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q1. 希望台数3のASGで、1台が異常になり置換対象になった。基本的な動きは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="asg-q1" value="a"><span>必ず2台のまま運用を続ける</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q1" value="b"><span>CPUが65%を超えるまで何もしない</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q1" value="c"><span>代替を起動し、希望台数へ戻そうとする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q1" value="d"><span>AMIを自動的に作り直す</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 起動テンプレートは、EC2の設計図</h3>
+            <div class="ct-copy"><p>起動テンプレート（Launch Template）には、AMI、インスタンスタイプ、キーペア、セキュリティグループ、ストレージ、IAMインスタンスプロファイル、ユーザーデータなどを定義します。ASGが新しいEC2を起動するとき、この設計図を使います。</p><p>テンプレートにはバージョンがあります。AMIやユーザーデータを変更するときは新しいバージョンを作り、ASGが参照するバージョンを更新します。設定を変えただけでは既存インスタンスは自動更新されないため、Instance Refreshなどで置換します。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">設定場所</th><th scope="col">代表的な内容</th><th scope="col">答える問い</th></tr></thead><tbody><tr><th scope="row">起動テンプレート</th><td>AMI、タイプ、SG、IAM、ディスク、ユーザーデータ</td><td>どんなEC2を起動する？</td></tr><tr><th scope="row">Auto Scalingグループ</th><td>サブネット、最小・希望・最大、ヘルスチェック</td><td>どこで何台管理する？</td></tr><tr><th scope="row">スケーリングポリシー</th><td>メトリクス、目標値、増減ルール</td><td>いつ台数を変える？</td></tr></tbody></table></div>
+            <div class="ct-note"><strong>起動設定（Launch Configuration）は旧方式です。</strong>新しいインスタンスタイプへの対応制限があり、新しいアカウントでは作成できません。新規設計では起動テンプレートを使います。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/autoscaling/ec2/userguide/advanced-settings-for-your-launch-template.html" target="_blank" rel="noopener">起動テンプレートの設定</a>、<a href="https://docs.aws.amazon.com/autoscaling/ec2/userguide/launch-configurations.html" target="_blank" rel="noopener">起動設定の制限</a></p>
+            <div data-quiz data-id="asg-q2" data-answer="a" data-explanation="同じEC2構成を再現する設計図は起動テンプレートです。ASGはそのテンプレートを使って必要なインスタンスを起動します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q2. AMI・インスタンスタイプ・SGを揃える中心的な設定は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="asg-q2" value="a"><span>起動テンプレート</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q2" value="b"><span>ターゲット追跡ポリシー</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q2" value="c"><span>CloudTrailの証跡</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q2" value="d"><span>ALBのリスナールール</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.3 最小・希望・最大キャパシティ</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">値</th><th scope="col">意味</th><th scope="col">例</th></tr></thead><tbody><tr><th scope="row">最小（Min）</th><td>通常はこれより少なくしない下限</td><td>障害時も最低2台を保つ</td></tr><tr><th scope="row">希望（Desired）</th><td>ASGが維持しようとする現在の目標台数</td><td>現在4台を動かしたい</td></tr><tr><th scope="row">最大（Max）</th><td>スケールアウトできる上限</td><td>費用や下流容量から10台まで</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>原則として、最小 ≤ 希望 ≤ 最大になるよう設定します。負荷が高くても希望台数が最大に達していれば、それ以上は増えません。スケーリングポリシーだけでなく、最大値やEC2・IPアドレス等のクォータも確認します。</p></div>
+            <div data-fill data-id="asg-q3" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q3. CPUが高いのに8台から増えない。ASGのMaxが8なら、まず見直す値は？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="最大|maximum|max|最大キャパシティ" aria-label="見直すキャパシティ" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="advanced" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：負荷に合わせて台数を変える</h2></div>
+        <div class="space-y-8">
+          <div id="tracking" class="tb-card p-5 sm:p-7 scroll-mt-28">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 ターゲット追跡は「CPU 65%付近」を目指す</h3>
+            <div class="ct-copy"><p>ターゲット追跡スケーリングは、温度調節器に似ています。平均CPU使用率などのメトリクスと目標値を決めると、AWSがCloudWatchアラームを管理し、目標へ近づくようキャパシティを増減します。</p><p>平均CPUが目標を上回るとスケールアウトし、十分に下回る状態が続くとスケールインします。厳密に常時65.0%へ固定するわけではありません。整数台への丸め、メトリクスの周期、ウォームアップ、最小・最大値があるためです。</p></div>
+            <div data-asg-sim class="asg-sim mt-5">
+              <h4 class="font-bold text-sky-900">目標CPUと必要台数の学習シミュレーター</h4><p class="text-sm text-slate-600 mt-2">総負荷が一定で均等に分散される単純モデルです。概算台数＝切り上げ（現在台数×現在CPU÷目標CPU）。</p>
+              <div class="asg-sim-fields"><label>現在の台数<input data-asg-current type="number" min="1" max="100" value="4"></label><label>現在の平均CPU（%）<input data-asg-cpu type="number" min="1" max="100" value="90"></label><label>目標CPU（%）<input data-asg-target type="number" min="1" max="100" value="65"></label><label>Min<input data-asg-min type="number" min="0" max="100" value="2"></label><label>Max<input data-asg-max type="number" min="1" max="100" value="10"></label></div>
+              <div class="asg-sim-result"><p class="text-xs text-sky-700">概算結果</p><p class="mt-1"><strong data-asg-result>6台へスケールアウト</strong></p><p data-asg-detail class="mt-2">4×90÷65＝5.54を切り上げ、6台。Min/Maxの範囲内です。</p></div>
+              <p class="text-xs text-slate-500 mt-3">実際のAuto Scalingの計算や安定化動作を完全再現するものではありません。アプリのベンチマークと監視で検証してください。</p>
+            </div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/autoscaling/ec2/userguide/as-scaling-target-tracking.html" target="_blank" rel="noopener">ターゲット追跡ポリシー</a></p>
+            <div data-quiz data-id="asg-q4" data-answer="d" data-explanation="平均CPUを目標値へ近づけたい要件には、ターゲット追跡が直接対応します。AWSが必要なアラームを管理します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q4. 平均CPUを65%付近に保ちたい。最も直接的なポリシーは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="asg-q4" value="a"><span>予定されたスケーリングだけを設定</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q4" value="b"><span>起動テンプレートだけを作成</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q4" value="c"><span>シンプルスケーリングで台数を固定</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q4" value="d"><span>平均CPU 65%のターゲット追跡</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 ポリシーは要件で使い分ける</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">方式</th><th scope="col">考え方</th><th scope="col">代表例</th></tr></thead><tbody><tr><th scope="row">ターゲット追跡</th><td>メトリクスを目標値へ近づける</td><td>平均CPU 65%、ALBの1ターゲット当たり要求数</td></tr><tr><th scope="row">ステップスケーリング</th><td>しきい値の超過幅で増減量を変える</td><td>CPU 70%なら+1、90%なら+3</td></tr><tr><th scope="row">シンプルスケーリング</th><td>アラームに対し1つの増減とクールダウン</td><td>旧来の単純なルール</td></tr><tr><th scope="row">予定されたスケーリング</th><td>日時・周期に合わせて事前に変更</td><td>毎週月曜8時に最小台数を増加</td></tr><tr><th scope="row">予測スケーリング</th><td>過去の傾向から将来の需要を予測</td><td>周期性のあるアクセスへ先回り</td></tr></tbody></table></div>
+            <div class="ct-note">通常の動的スケーリングでは、まずターゲット追跡を検討します。時刻が分かるイベントには予定、段階的な独自制御にはステップなど、組み合わせることもあります。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/autoscaling/ec2/userguide/as-scale-based-on-demand.html" target="_blank" rel="noopener">動的スケーリング</a></p>
+            <div data-quiz data-id="asg-q5" data-answer="b" data-explanation="毎週決まった時刻に負荷が上がるなら、予定されたスケーリングで事前に容量を増やせます。ターゲット追跡との併用も検討できます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q5. 毎週月曜9時にアクセスが急増する。事前に8時50分から増やしたい。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="asg-q5" value="a"><span>起動テンプレートのAMIを毎週変更</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q5" value="b"><span>予定されたスケーリング</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q5" value="c"><span>CloudTrailのログ整合性検証</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q5" value="d"><span>セキュリティグループのルール追加</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.3 メトリクスは台数との関係で選ぶ</h3>
+            <div class="ct-copy"><p>ターゲット追跡に適した利用率メトリクスは、グループ全体の台数を増やすと1台当たりの値が下がる関係を持ちます。負荷が均等に分散される平均CPUや、ALBの1ターゲット当たり要求数が代表例です。</p><p>総リクエスト数のように、インスタンスを増やしても値が下がらないメトリクスをそのまま使うと、目標追跡の前提に合いません。キュー処理なら、キューの長さ÷処理可能インスタンス数など、1台当たりのバックログを表すカスタムメトリクスを検討します。</p></div>
+            <div class="ct-note">EC2のCPUメトリクスで速く反応させたい場合は、詳細モニタリングによる1分間隔を検討します。標準モニタリングの間隔では反応が遅くなる可能性があります。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/autoscaling/ec2/userguide/as-scaling-target-tracking.html" target="_blank" rel="noopener">ターゲット追跡のメトリクス選択</a></p>
+            <div data-quiz data-multiple data-id="asg-q6" data-answer="a,c" data-explanation="平均CPUと1ターゲット当たり要求数は、台数を増やすと通常は1台当たりの負荷が下がるため、ターゲット追跡に適します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q6. ターゲット追跡に適した代表的なメトリクスを2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="asg-q6" value="a"><span>ASGの平均CPU使用率</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="asg-q6" value="b"><span>会社全体の毎月の売上</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="asg-q6" value="c"><span>ALBの1ターゲット当たり要求数</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="asg-q6" value="d"><span>EC2インスタンスの作成日時</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="operations" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：正常性、起動待ち、更新</h2></div>
+        <div class="space-y-8">
+          <div id="health" class="tb-card p-5 sm:p-7 scroll-mt-28">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 ALBと連携し、アプリの正常性も見る</h3>
+            <div class="ct-copy"><p>ASGにはEC2のステータスチェックがあります。ALBのターゲットグループへ関連付け、Elastic Load Balancingのヘルスチェックも有効にすると、ALBが不健康と報告したインスタンスをASGが置換できるようになります。</p><p>ALBは正常なターゲットへリクエストを分散し、ASGは必要な台数を維持します。役割は異なります。ヘルスチェックのパス、成功コード、ポートと、EC2側のセキュリティグループを揃えます。</p></div>
+            <div class="ct-flow" aria-label="ALBとAuto Scalingの連携"><div><small>01 ALB</small><strong>正常なターゲットへ転送</strong><p>/healthなどを定期的に確認</p></div><div><small>02 ASG</small><strong>不健康の通知を受ける</strong><p>ELBヘルスチェックを有効化</p></div><div><small>03 起動テンプレート</small><strong>代替EC2を起動</strong><p>希望台数を回復し、ターゲットへ登録</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/autoscaling/ec2/userguide/health-checks-overview.html" target="_blank" rel="noopener">ASGのヘルスチェック概要</a></p>
+            <div data-quiz data-id="asg-q7" data-answer="c" data-explanation="ALBのヘルスチェックをASGで利用する設定により、アプリとして不健康なEC2を置換できます。ALBとASGは分担して動きます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q7. EC2自体はrunningだが、アプリが/healthへ500を返し続ける。置換につなげる設定は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="asg-q7" value="a"><span>CPUターゲットを100%にする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q7" value="b"><span>CloudTrailの証跡を削除する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q7" value="c"><span>ALBのヘルスチェックをASGで利用する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q7" value="d"><span>MaxをMinより小さくする</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 ウォームアップと猶予期間を区別する</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">設定</th><th scope="col">主な目的</th><th scope="col">考慮する時間</th></tr></thead><tbody><tr><th scope="row">デフォルトインスタンスウォームアップ</th><td>新規インスタンスの負荷をスケーリング判断へ反映するまで待つ</td><td>起動・アプリ準備・メトリクス安定</td></tr><tr><th scope="row">ヘルスチェックの猶予期間</th><td>起動直後の一時的な失敗で置換しない</td><td>アプリが健康になるまで</td></tr><tr><th scope="row">クールダウン</th><td>主にシンプルスケーリングの活動間隔を制御</td><td>前回の増減効果が表れるまで</td></tr><tr><th scope="row">登録解除の遅延</th><td>ALBから外す際に処理中の接続を待つ</td><td>既存リクエストの完了</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>アプリ起動に5分かかるのに、起動直後から負荷計算やヘルスチェックの置換対象にすると、余計な増設や置換ループが起こり得ます。実測した初期化時間を基に設定します。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/autoscaling/ec2/userguide/ec2-auto-scaling-default-instance-warmup.html" target="_blank" rel="noopener">デフォルトインスタンスウォームアップ</a></p>
+            <div data-fill data-id="asg-q8" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q8. 新規EC2のメトリクスを集約値へ含めるまで待つ代表的な設定は？</p><label class="text-sm text-slate-700"><span class="tb-fill"><input data-answer="ウォームアップ|インスタンスウォームアップ|instance warmup|default instance warmup" aria-label="待つための設定" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.3 新しいAMIはInstance Refreshで展開する</h3>
+            <div class="ct-copy"><p>起動テンプレートのバージョンを更新しても、すでに動いているEC2はそのままです。Instance Refreshを開始すると、指定した起動テンプレートを基に、既存インスタンスを段階的に置換できます。</p><p>最低限維持する正常割合、チェックポイント、ウォームアップなどを設定し、一斉停止を避けます。起動テンプレートの新バージョン、アプリのヘルスチェック、ロールバック方法を先にテストします。</p></div>
+            <details class="tb-accordion mt-4"><summary>ライフサイクルフックを使う場面</summary><div class="tb-accordion-body">起動時や終了前にインスタンスを待機状態へ置き、独自処理の時間を確保できます。起動時の外部登録、終了前のログ退避などが例です。処理後はライフサイクルアクションを完了し、タイムアウト時の動作も設計します。</div></details>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/autoscaling/ec2/userguide/asg-instance-refresh.html" target="_blank" rel="noopener">Instance Refresh</a>、<a href="https://docs.aws.amazon.com/autoscaling/ec2/userguide/lifecycle-hooks.html" target="_blank" rel="noopener">ライフサイクルフック</a></p>
+            <div data-quiz data-id="asg-q9" data-answer="b" data-explanation="テンプレート更新は新規起動に使う設計図の変更です。既存インスタンスを計画的に置換するにはInstance Refreshを利用できます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q9. 新AMIの起動テンプレートへ切り替え、既存EC2も段階的に置換したい。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="asg-q9" value="a"><span>テンプレートを保存すれば既存EC2の中身も即時変更される</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q9" value="b"><span>Instance Refreshを計画・実行する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q9" value="c"><span>Maxを0にして運用する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q9" value="d"><span>フローログのACCEPTをAMIに変換する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：画像の設問を解く</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <div class="ct-copy"><p>要件は2つです。①AMI・インスタンスタイプ・セキュリティグループなどを常に同じ内容にする。②CPU使用率を65%に維持するよう自動スケールする。</p><p>①は起動テンプレート、②はターゲット追跡スケーリングが担当します。したがって画像の3番目が最適です。</p></div>
+          <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">選択肢の要素</th><th scope="col">評価</th></tr></thead><tbody><tr><th scope="row">起動テンプレート</th><td>正しい。EC2の構成を再利用できる</td></tr><tr><th scope="row">起動設定</th><td>旧方式。新規構成では起動テンプレートを選ぶ</td></tr><tr><th scope="row">ターゲット追跡</th><td>正しい。CPU 65%という目標値を追跡する</td></tr><tr><th scope="row">シンプルスケーリング</th><td>増減量を明示する方式で、目標値維持の要件に最も直接的ではない</td></tr></tbody></table></div>
+          <div data-quiz data-id="asg-q10" data-answer="c" data-explanation="同一構成は起動テンプレート、CPU 65%付近の維持はターゲット追跡ポリシーで実現します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q10. 設問の要件を満たす組み合わせは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="asg-q10" value="a"><span>簡易スケーリング＋起動テンプレート</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q10" value="b"><span>簡易スケーリング＋起動設定</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q10" value="c"><span>ターゲット追跡＋起動テンプレート</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q10" value="d"><span>ターゲット追跡＋起動設定</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          <div class="ct-note mt-5"><strong>覚え方：</strong>「どんなEC2？」は起動テンプレート。「何台？」はASGのMin / Desired / Max。「いつ増減？」はスケーリングポリシーです。</div>
+        </div>
+      </section>
+      <section id="scheduled-multi-az" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">+</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">追加演習：既知のピークとAZ障害へ備える</h2></div>
+        <div class="space-y-5">
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">毎日08:00〜19:00、CPU目標55%</h3><p class="ct-copy mt-3">ピーク前にScheduled Actionで希望／最小容量を引き上げ、終了後に戻します。その上でCPU 55%のターゲット追跡を併用すると、既知の時間帯を先回りしつつ予想外の変動にも追従できます。ターゲット追跡は「55%を超えたら1台追加」という単純閾値ではなく、平均CPUを目標値付近へ維持する制御です。</p></div>
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">火・木20:00〜23:00だけ遅い</h3><p class="ct-copy mt-3">曜日と時刻が明確なら、ピーク開始よりウォームアップ時間分早く増やし、終了後に戻す定期Scheduled Actionが最小構成です。EventBridge＋Lambdaで希望容量を書き換える独自実装は不要です。</p></div>
+          <div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">単一AZのASGを高可用化</h3><p class="ct-copy mt-3">同一リージョン内の別AZにあるサブネットをASGへ追加し、ALBも複数AZで有効化します。最大／最小／希望容量とAZ Rebalancingを確認し、障害時に残存AZへ起動できるクォータとIP余力を持たせます。</p></div>
+        </div>
+        <div data-quiz data-id="asg-q20" data-answer="c" data-explanation="予定された容量確保とターゲット追跡を併用すると、先回りと動的追従を両立できます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q20. 毎日決まったピークがあり、CPUを55%付近に保ちたい。最適な構成は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="asg-q20" value="a"><span>クールダウンだけを変更</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q20" value="b"><span>ターゲット追跡だけ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="asg-q20" value="c"><span>Scheduled Action＋CPU 55%のターゲット追跡</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+      </section>
+    </article>
+
+    <section class="mt-12"><h2 class="text-xl font-bold text-sky-950 mb-4">次のステップ</h2><div class="tb-card p-5 sm:p-6"><ul class="space-y-3 text-sm text-slate-700"><li><a class="text-sky-700 underline" href="alb-nlb.html">ALB / NLB</a>：複数EC2への振り分けとヘルスチェックを理解する。</li><li><a class="text-sky-700 underline" href="service-quotas.html">リソース上限</a>：Maxまで増やせるだけのEC2やIPのクォータを確認する。</li><li><a class="text-sky-700 underline" href="systems-manager.html">Systems Manager</a>：多数のEC2を同じ状態で運用する方法を学ぶ。</li><li><a class="text-sky-700 underline" href="https://docs.aws.amazon.com/autoscaling/ec2/userguide/what-is-amazon-ec2-auto-scaling.html" target="_blank" rel="noopener">AWS公式：Amazon EC2 Auto Scaling</a></li></ul></div></section>
+    <div class="mt-10 text-center"><a href="../../../index.html" class="inline-block rounded-full bg-white text-sky-700 ring-1 ring-sky-200 px-6 py-3 text-sm font-semibold">← 通常版の教材一覧へ</a></div>
+  </main>
+  <footer class="text-center text-xs text-slate-400 pb-10">Engineer Textbook · Amazon EC2 Auto Scaling · 公式資料確認：2026-10-29</footer>
+  <script src="../../../assets/shared.js?v=20261029-9"></script>
+</body>
+</html>

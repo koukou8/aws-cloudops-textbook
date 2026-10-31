@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ja" data-topic-id="cloud-aws-lambda">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AWS Lambdaの基本、イベント駆動、同時実行数、予約済みとプロビジョンド同時実行数、再試行と運用を学ぶ教材。400の専用枠を確保する仕組みをデモで比較できます。">
+  <title>AWS Lambdaと同時実行制御 | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"Lambda"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <a href="../../../quick/index.html#lambda" style="display:inline-block;margin-bottom:20px;padding:8px 14px;background:#fff;border:1px solid #dce4ec;border-radius:6px;color:#1763c2;font-size:13px;text-decoration:none">← このテーマを約2〜3分で復習する</a>
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">イベント駆動と実行容量</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">AWS Lambda<span class="block sm:inline">と同時実行制御</span></h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">コードを必要なときに動かし、負荷に合わせて並列実行する。サムネイル生成の400枠を題材に、Lambdaの仕組みと容量設計を学びます。</p>
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">画像の設問から学ぶ</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">正解は2番目。予約済み同時実行数を400に設定します。</p>
+          <p class="ct-copy mt-2">アカウント全体の枠から、この関数だけが使える400枠を取り分けます。400は同時に上限にもなるため、この関数は400を超えて実行できません。予約は、400個の実行環境を事前に起動しておく設定とは異なります。</p>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500"><li>Lambdaのイベント駆動と、同期・非同期・イベントソースマッピングを区別する。</li><li>同時実行数と毎秒リクエスト数、予約済みとプロビジョンドの違いを説明する。</li><li>動画サムネイル処理の権限、再試行、重複対策、監視を設計する。</li></ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">基礎</a><a href="#concurrency" class="underline underline-offset-4">同時実行のデモ</a><a href="#operations" class="underline underline-offset-4">実務</a><a href="#case" class="underline underline-offset-4">設問の解説</a></nav>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-6">
+          <div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div>
+          <div class="tb-progress"><div data-progress-bar style="width:0%"></div></div>
+          <p class="mt-2 text-xs text-slate-500">10個の演習の正解状況を、このブラウザに保存します。</p>
+        </div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編</h2><span class="tb-badge is-basic">基礎</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 Lambdaは、イベントに応じてコードを動かす</h3>
+            <div class="ct-copy"><p>AWS Lambdaは、サーバーの台数やOSの保守を利用者が直接管理せず、コードを実行できるサーバーレスのコンピューティングサービスです。関数へコードを配置し、ファイルのアップロード、API要求、メッセージの到着などをきっかけに実行します。</p><p>サーバーレスでも実際にはサーバー上で動きます。AWSが基盤を管理する一方で、利用者はコード、依存ライブラリ、IAM権限、タイムアウト、容量などを設計します。</p></div>
+            <div class="ct-flow" aria-label="動画サムネイル処理の例"><div><small>01 イベント</small><strong>S3へ動画を保存</strong><p>入力用バケットやプレフィックスに動画が到着</p></div><div><small>02 処理</small><strong>Lambdaを実行</strong><p>動画を読み、必要なフレームからサムネイルを生成</p></div><div><small>03 結果</small><strong>S3へ画像を保存</strong><p>別バケットや出力用プレフィックスへ結果を書き込む</p></div></div>
+            <div class="ct-note">この教材は、画像のようなイベント駆動の関数（現在の公式資料ではLambda Event Functions）の、通常のオンデマンド実行を中心に扱います。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/lambda/latest/dg/welcome.html" target="_blank" rel="noopener">What is AWS Lambda?</a></p>
+            <div data-quiz data-id="lambda-q-definition" data-answer="b" data-explanation="Lambdaでは基盤のサーバー管理をAWSが行います。利用者はコード、権限、構成や依存関係を管理します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q1. Lambdaの説明として正しいものは？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="lambda-q1" value="a"><span>利用者がEC2へSSHし、毎回OSを起動するサービス</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q1" value="b"><span>サーバーの基盤管理をAWSへ任せ、コードを実行できるサービス</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q1" value="c"><span>IAMの権限を不要にするサービス</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q1" value="d"><span>イベントを保存するだけで処理しないサービス</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 関数、ハンドラー、実行環境</h3>
+            <div class="ct-copy"><p>関数を呼び出すと、Lambdaはイベントをコードの入口であるハンドラーへ渡します。イベントには、たとえば入力動画のS3バケット名とオブジェクトキーが含まれます。実行環境はランタイム、コード、ライブラリなどを読み込んでからハンドラーを動かします。</p><p>新しく実行環境を初期化する際の開始遅延を、コールドスタートと呼びます。同じ実行環境が再利用されると、初期化を省ける場合があります。ただし再利用は保証されないので、必要な永続データはS3やDynamoDBなどへ保存します。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>設定・用語</th><th>何に影響するか</th><th>サムネイル処理の例</th></tr></thead><tbody><tr><td>メモリ</td><td>利用できるメモリと、それに比例するCPU能力</td><td>動画処理ライブラリの性能を測って調整</td></tr><tr><td>タイムアウト</td><td>1回の実行の終了期限</td><td>通常のオンデマンド実行は最大900秒（15分）</td></tr><tr><td>実行ロール</td><td>関数からAWSリソースを操作する権限</td><td>入力S3の読み取り、出力S3の書き込み、ログ出力</td></tr><tr><td>同時実行数</td><td>同じ時点で処理中の要求数</td><td>複数の動画を並行して処理する容量</td></tr></tbody></table></div>
+            <div class="ct-note"><strong>メモリと同時実行数は別です。</strong>メモリを増やして処理時間が短くなることはありますが、関数専用の400枠を確保する設定にはなりません。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-concurrency.html" target="_blank" rel="noopener">実行環境の初期化と再利用</a>、<a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-memory.html" target="_blank" rel="noopener">メモリ設定</a>、<a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html" target="_blank" rel="noopener">Lambdaのクォータ</a></p>
+            <div data-quiz data-id="lambda-q-memory" data-answer="c" data-explanation="メモリは1回の処理の性能に影響します。専用の同時実行枠を取り分けるのは予約済み同時実行数です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q2. メモリを増やすと、必ず400の専用同時実行枠が確保される？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="lambda-q2" value="a"><span>はい。メモリ1MBが1同時実行になる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q2" value="b"><span>はい。処理時間とは関係なく400になる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q2" value="c"><span>いいえ。性能調整と専用枠の確保は別の設定</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q2" value="d"><span>いいえ。Lambdaは並列処理できない</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.3 呼び出し方で、待ち方と再試行が変わる</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>方式</th><th>動き</th><th>例と失敗時の扱い</th></tr></thead><tbody><tr><td>同期呼び出し</td><td>呼び出し元が処理結果を待つ</td><td>API要求など。呼び出し元や連携サービスがエラー・再試行を扱う</td></tr><tr><td>非同期呼び出し</td><td>Lambdaがイベントをキューに受け取り、後から実行</td><td>S3イベント通知など。Lambda側の再試行・イベント有効期限を設定する</td></tr><tr><td>イベントソースマッピング</td><td>Lambdaがキューやストリームを読み、バッチで関数を起動</td><td>SQS、Kinesis等。再試行や並列度は連携元ごとの仕様を確認する</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>業務全体が非同期でも、関数の呼び出しがLambdaの「非同期呼び出し」とは限りません。たとえばSQSのイベントソースマッピングは、Lambdaがメッセージを読み、関数を同期的に呼び出して結果を確認します。</p><p>そのため、関数の非同期DLQ設定と、SQSキューのredrive policyによるDLQは別の仕組みです。DLQは処理できなかったイベントの回収に使いますが、同時実行の専用枠を増やす設定ではありません。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-invocation.html" target="_blank" rel="noopener">呼び出し方式</a>、<a href="https://docs.aws.amazon.com/lambda/latest/dg/with-s3.html" target="_blank" rel="noopener">S3イベント</a>、<a href="https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html" target="_blank" rel="noopener">SQSとの連携</a></p>
+            <div data-quiz data-id="lambda-q-invocation" data-answer="a" data-explanation="S3イベント通知はLambdaを非同期で呼び出します。SQSはイベントソースマッピングがキューを読み、関数を同期的に実行します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q3. S3イベント通知からのLambda呼び出しは、基本的にどの方式？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="lambda-q3" value="a"><span>非同期呼び出し</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q3" value="b"><span>利用者がSSHして手動実行</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q3" value="c"><span>必ずSQSのイベントソースマッピング</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q3" value="d"><span>メモリ増設による実行</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="concurrency" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：同時実行の容量設計</h2><span class="tb-badge is-applied">応用</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 同時実行数と「毎秒何件」は違う</h3>
+            <div class="ct-copy"><p>同時実行数は、ある瞬間に処理中の要求数です。毎秒の受付件数（RPS）ではありません。通常のオンデマンド実行では、1つの実行環境が同時に1つの要求を処理し、並列要求に応じて複数環境へ広がります。</p><p>容量の概算には、<strong>平均同時実行数 ≈ 毎秒の平均到着数 × 平均処理時間（秒）</strong>を使います。毎秒200件が到着し、平均2秒かかるなら、およそ400の同時実行が必要です。</p></div>
+            <div class="grid sm:grid-cols-3 gap-3 mt-5"><div class="rounded-2xl bg-sky-50 p-5"><p class="text-xs text-sky-600">平均到着数</p><p class="text-2xl font-bold mt-2">200件/秒</p></div><div class="rounded-2xl bg-sky-50 p-5"><p class="text-xs text-sky-600">平均処理時間</p><p class="text-2xl font-bold mt-2">2秒</p></div><div class="rounded-2xl bg-sky-100/70 p-5"><p class="text-xs text-sky-600">平均同時実行数の概算</p><p class="text-2xl font-bold mt-2">400</p></div></div>
+            <div class="ct-note">これは平均値の目安です。実際には到着の偏り、長い処理、再試行、ソース側の制約も見ます。短時間の関数では、同時実行枠が余っていても、別のRPS制限へ到達する場合があります。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-concurrency.html" target="_blank" rel="noopener">同時実行数の考え方とRPS</a></p>
+            <div data-fill data-id="lambda-q-calculation" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="ct-copy">毎秒100件、平均処理時間4秒なら、平均同時実行数の概算は <span class="tb-fill"><input data-answer="400|４００" inputmode="numeric" aria-label="平均同時実行数の概算" placeholder="???"></span> です。</p>
+              <button data-fill-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 予約済みとプロビジョンドを使い分ける</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>比較</th><th>予約済み同時実行数</th><th>プロビジョンド同時実行数</th></tr></thead><tbody><tr><td>主な目的</td><td>その関数だけの同時実行枠を確保し、上限も設定</td><td>実行環境を事前に初期化し、開始時の遅延を抑える</td></tr><tr><td>400にすると</td><td>400枠を占有し、400を超えて実行しない</td><td>事前初期化した環境を400用意する</td></tr><tr><td>コールドスタート</td><td>初期化を省く設定ではない</td><td>用意した環境で処理する範囲の初期化遅延を抑える</td></tr><tr><td>設定単位</td><td>関数単位</td><td>公開バージョン／エイリアス。$LATESTには設定不可</td></tr><tr><td>追加料金</td><td>設定自体の追加料金なし。通常の実行料金は発生</td><td>事前確保する容量に追加料金が発生</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>プロビジョンド同時実行数もアカウントの容量を消費します。ただし、それを超えた要求をオンデマンドで処理できる場合があり、関数の明確な上限を設定する予約済み同時実行数とは役割が異なります。</p><p>必要なら両方を組み合わせられます。予約済み同時実行数が設定されている関数では、プロビジョンド同時実行数の合計はその予約枠を超えられません。画像のような「他の関数に左右されない専用の400枠」が要件なら、まず予約済み同時実行数を設定します。</p></div>
+            <div data-lambda-concurrency class="lambda-demo mt-5">
+              <h4 class="font-bold text-sky-900">他の関数が忙しくても、400枠は使える？</h4>
+              <p class="text-xs text-slate-500 leading-relaxed mt-2">プロビジョンド同時実行数を使わない静的な学習モデルです。「予約なし」の比較では、他の共有関数が先に枠を使った状況を仮定します。実際のスケジューリング、初期化、RPS、ソース側の制限は再現しません。</p>
+              <div class="lambda-demo-inputs"><label>アカウント・リージョンの上限<input data-lambda-quota type="number" min="100" step="100" value="1000" inputmode="numeric"></label><label>他関数の予約枠の合計<input data-lambda-other-reserved type="number" min="0" step="100" value="100" inputmode="numeric"></label><label>サムネイル関数の予約枠<input data-lambda-reserved type="number" min="0" step="100" value="400" inputmode="numeric"></label><label>他の共有関数の要求数<input data-lambda-other-demand type="number" min="0" step="100" value="800" inputmode="numeric"></label><label>サムネイル処理の要求数<input data-lambda-target-demand type="number" min="0" step="100" value="400" inputmode="numeric"></label></div>
+              <div class="lambda-pool" aria-label="予約後の容量配分"><div data-lambda-segment="other"></div><div data-lambda-segment="target"></div><div data-lambda-segment="shared"></div></div>
+              <p class="text-xs text-slate-500 leading-relaxed mt-2">紫：他関数の予約 <span data-lambda-value="otherReserved">100</span> ／青：対象関数の予約 <span data-lambda-value="reserved">400</span> ／灰：残る共有枠 <span data-lambda-value="free">500</span></p>
+              <div class="lambda-compare"><div><h5>対象関数に予約なし</h5><p><strong data-lambda-value="withoutTarget">100</strong> / <span data-lambda-value="targetDemand">400</span> を実行可能</p><p>直ちに実行できない対象要求：<span data-lambda-value="withoutBlocked">300</span><br>他の共有関数が使う枠：<span data-lambda-value="withoutOther">800</span></p></div><div><h5>対象関数に予約あり</h5><p><strong data-lambda-value="withTarget">400</strong> / <span data-lambda-value="targetDemand">400</span> を実行可能</p><p>直ちに実行できない対象要求：<span data-lambda-value="withBlocked">0</span><br>他の共有関数が使える枠：<span data-lambda-value="withOther">500</span></p></div></div>
+              <div data-lambda-result class="lambda-demo-result" aria-live="polite">入力に応じて比較します。</div>
+            </div>
+            <div class="ct-note"><strong>試すポイント：</strong>他の共有関数の要求を増やしても、予約後の対象関数の枠は変わりません。次にサムネイル要求を500へ増やすと、予約400が上限であることを確認できます。予約を0にした場合は「予約なし」ではなく、この関数の新たな実行を止める設定です。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-concurrency.html" target="_blank" rel="noopener">予約済み同時実行数</a>、<a href="https://docs.aws.amazon.com/lambda/latest/dg/provisioned-concurrency.html" target="_blank" rel="noopener">プロビジョンド同時実行数</a></p>
+            <div data-quiz data-id="lambda-q-reserved" data-answer="a,c" data-multiple data-explanation="予約済み400は、その関数の専用枠かつ上限です。初期化済み環境を準備する設定ではなく、使わない枠を他関数へ貸す仕組みでもありません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q5. 予約済み同時実行数400について正しいものをすべて選んでください。</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="lambda-q5" value="a"><span>他の関数がその400枠を使うことはできない</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="lambda-q5" value="b"><span>400個の環境が常に初期化済みになる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="lambda-q5" value="c"><span>その関数の同時実行数は400が上限になる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="lambda-q5" value="d"><span>未使用の予約枠は他の関数が借りられる</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.3 アカウント上限・共有枠・スケーリング速度</h3>
+            <div class="ct-copy"><p>標準的な同時実行数クォータは、アカウント・リージョンあたり1,000です。ただし新しいアカウントでは初期クォータが低い場合があり、引き上げ済みならその適用値が使われます。</p><p>予約枠を割り当てる際は、未予約の関数用に少なくとも100枠を残す必要があります。他の予約が100あり、上限1,000から対象へ400を確保するなら、残る未予約プールは500です。すべての予約・事前確保の設定を確認して計算します。</p><p>一方、スケーリング速度は「新しい実行環境をどれだけ速く増やせるか」です。通常のオンデマンド関数では、各関数で10秒ごとに最大1,000環境を増やすスケーリングレートがあります。専用枠を確保しても、初期化や急激な負荷増加、イベントソース、接続先の制約は別に残ります。</p></div>
+            <div class="ct-note"><strong>画像の「常に400」の意味：</strong>他の関数に奪われない同時実行枠を確保することです。「400件が常に実行中」「400件がゼロ遅延で開始」「下流サービスも400並列に耐える」という意味ではありません。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html" target="_blank" rel="noopener">Lambdaクォータ</a>、<a href="https://docs.aws.amazon.com/lambda/latest/dg/scaling-behavior.html" target="_blank" rel="noopener">スケーリング速度</a></p>
+            <div data-quiz data-id="lambda-q-account" data-answer="b" data-explanation="1,000−他関数の予約100−対象の予約400＝共有枠500です。予約枠はアカウント上限へ追加されるものではありません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q6. 上限1,000、他関数の予約100、対象の予約400。プロビジョンド設定がない場合、残る共有枠は？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="lambda-q6" value="a"><span>1,500</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q6" value="b"><span>500</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q6" value="c"><span>400</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q6" value="d"><span>0</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="operations" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編</h2><span class="tb-badge is-prac">実務</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 予約済み400を設定する</h3>
+            <p class="ct-copy">Lambdaの関数を開き、設定（Configuration）→同時実行（Concurrency）で予約済み同時実行数を設定します。アカウント上限と他の予約設定を先に確認してください。CLIでは次の操作に相当します。</p>
+            <pre class="tb-code mt-4"><code># アカウントの適用上限などを確認（参照操作）
+aws lambda get-account-settings --region ap-northeast-1
+
+# 対象関数の予約済み同時実行数を400へ変更（設定変更）
+aws lambda put-function-concurrency \
+  --function-name thumbnail-generator \
+  --reserved-concurrent-executions 400 \
+  --region ap-northeast-1
+
+# 設定した値を確認（参照操作）
+aws lambda get-function-concurrency \
+  --function-name thumbnail-generator \
+  --region ap-northeast-1</code></pre>
+            <div class="ct-copy mt-4"><p>返却される <code>ReservedConcurrentExecutions</code> が400か確認します。アカウント上限を上げただけでは、この関数に専用枠を配分したことにはなりません。</p><p>コールドスタート低減も必要なら、公開バージョンやエイリアスへプロビジョンド同時実行数を追加し、そのエイリアスを呼び出すよう設定します。別名や$LATESTを呼んでいると、用意した環境が使われない場合があります。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-concurrency.html" target="_blank" rel="noopener">予約済み同時実行数の設定</a>、<a href="https://docs.aws.amazon.com/lambda/latest/dg/provisioned-concurrency.html" target="_blank" rel="noopener">プロビジョンド設定と呼び出し先</a></p>
+            <div class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q7. 設定と検証の順に並べ替えてください。</p>
+              <ul data-sortable data-id="lambda-q-procedure" data-answer="quota,configure,confirm,test" class="tb-sortable"><li data-id="confirm">対象関数の予約済み設定が400になったことを確認する</li><li data-id="quota">アカウントの適用上限と、他関数への割り当てを確認する</li><li data-id="test">負荷をかけて同時実行・スロットリング・下流への影響を確認する</li><li data-id="configure">put-function-concurrency等で予約済み同時実行数400を設定する</li></ul>
+              <p data-sortable-feedback class="text-sm text-slate-500 mt-3">ドラッグまたは矢印ボタンで変更すると判定します。</p>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 サムネイル処理の失敗・重複・権限を設計する</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>設計点</th><th>行うこと</th><th>理由</th></tr></thead><tbody><tr><td>入力と出力の分離</td><td>別バケットか、入力用プレフィックスだけにトリガーを限定</td><td>出力画像の保存で再び起動するループを防ぐ</td></tr><tr><td>冪等性</td><td>動画の識別子・バージョン等を使い、同じイベントの再処理を考慮</td><td>イベントの重複や再試行があっても、不要な重複結果を作らない</td></tr><tr><td>失敗の回収</td><td>非同期のon-failure destinationやDLQ等を設定</td><td>再試行後も失敗したイベントを調査・再処理する</td></tr><tr><td>実行ロール</td><td>入力のGetObject、出力のPutObject、必要なログ・KMS等の権限</td><td>関数が処理に必要なリソースだけを操作できるようにする</td></tr><tr><td>呼び出しの権限</td><td>S3から関数を呼べるリソースベースポリシー</td><td>関数がS3を読む権限とは別の許可が必要</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>非同期呼び出しでは、関数エラー時に既定で2回の追加試行があります。スロットリングやシステムエラーでは別の再試行規則が使われ、既定では最大6時間再試行されます。イベント有効期限や再試行設定も合わせて確認します。</p><p>再試行は、同時実行枠の確保や冪等性を不要にしません。動画が大きい場合は、ライブラリの配布方法、一時領域、処理時間を測定し、通常のLambda実行に収まる単位へ処理を分割するなどの設計を行います。</p></div>
+            <div class="ct-note"><strong>2種類の許可を確認：</strong>「S3がLambdaを呼び出せる」と「LambdaがS3の動画を読める」は別です。後者には関数の実行ロールを使います。IAM教材の「誰が何をできるか」の考え方が、そのまま当てはまります。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/lambda/latest/dg/with-s3.html" target="_blank" rel="noopener">S3トリガーと権限</a>、<a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-error-handling.html" target="_blank" rel="noopener">非同期のエラーと再試行</a>、<a href="https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html" target="_blank" rel="noopener">重複処理と設計</a>、<a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-intro-execution-role.html" target="_blank" rel="noopener">実行ロール</a></p>
+            <div data-quiz data-id="lambda-q-reliability" data-answer="a,c" data-multiple data-explanation="入力と出力を分離して再起動ループを防ぎ、イベント重複を前提に冪等な処理を設計します。DLQを追加しても実行容量は増えません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q8. 適切な設計をすべて選んでください。</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="lambda-q8" value="a"><span>入力だけが起動条件になるよう、バケットやプレフィックスを分ける</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="lambda-q8" value="b"><span>イベントは必ず1回だけ届くので重複対策を省く</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="lambda-q8" value="c"><span>実行ロールに必要なS3操作を許可する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="lambda-q8" value="d"><span>DLQを設定すれば400枠が自動的に予約される</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.3 監視と性能の調整</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>メトリクス・情報</th><th>見ること</th></tr></thead><tbody><tr><td>ConcurrentExecutions</td><td>実際の同時実行数。予約上限へ張り付いていないか</td></tr><tr><td>Throttles</td><td>実行前に制限された呼び出し。関数コードのErrorsとは別に確認</td></tr><tr><td>Duration / Errors</td><td>処理時間、タイムアウト、実行中のエラー</td></tr><tr><td>AsyncEventAge等</td><td>非同期イベントの待ち時間。容量不足で処理が遅れていないか</td></tr><tr><td>ログのメモリ使用量・下流側メトリクス</td><td>メモリ不足、S3やDB等の応答遅延・接続制約</td></tr><tr><td>ProvisionedConcurrencySpilloverInvocations</td><td>プロビジョンド環境を超えて通常の実行へ流れた呼び出し</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>処理時間が伸びると、同じ到着量でも必要な同時実行数が増えます。メモリ・CPUや依存先を調整して短縮できれば、必要容量が減る可能性があります。性能と実行コストを測定して判断します。</p><p>予約枠を大きくすると、別の関数が使える共有枠は減ります。また、Lambdaから400本同時にDB接続するなど、下流側へ負荷を集中させる場合があります。必要な専用枠を確保しつつ、接続数やキュー処理の並列度も合わせて調整します。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/lambda/latest/dg/monitoring-metrics-types.html" target="_blank" rel="noopener">Lambdaメトリクス</a>、<a href="https://docs.aws.amazon.com/lambda/latest/dg/monitoring-concurrency.html" target="_blank" rel="noopener">同時実行の監視</a>、<a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-memory.html" target="_blank" rel="noopener">メモリと性能</a></p>
+            <div data-quiz data-id="lambda-q-monitoring" data-answer="b" data-explanation="処理時間が長くなれば、同じRPSでも同時に処理中の要求が増えます。Duration、ConcurrentExecutions、Throttles、接続先の遅延などを確認します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q9. 到着数は同じなのに、同時実行数が増えました。まず考えられる原因は？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="lambda-q9" value="a"><span>DLQが自動で全要求を並列実行した</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q9" value="b"><span>処理時間や依存先の応答時間が長くなった</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q9" value="c"><span>予約数が自動的にメモリへ変換された</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q9" value="d"><span>IAMロールを使うと実行数が必ず倍増する</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：画像の設問を解く</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <h3 class="text-lg font-bold text-sky-900 mb-3">サムネイル関数へ、他のアプリに左右されない400枠を確保する</h3>
+          <p class="ct-copy">問題では、アカウント・リージョンのクォータ引き上げは完了しています。残っているのは、共有枠から対象関数専用の容量を確保する設定です。</p>
+          <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>選択肢</th><th>判断</th><th>理由</th></tr></thead><tbody><tr><td>1. DLQを設定</td><td>目的が異なる</td><td>失敗イベントの回収・再処理に使う。専用の同時実行枠は確保しない</td></tr><tr><td>2. 予約済み同時実行数400</td><td>正解</td><td>他関数が使えない400枠を確保し、対象関数の上限も400にする</td></tr><tr><td>3. プロビジョンド同時実行数400</td><td>この設問の狙いとは異なる</td><td>主な目的は事前初期化による開始遅延の低減。今回求められた専用枠と上限の制御には予約済みを使う</td></tr><tr><td>4. メモリを増やす</td><td>目的が異なる</td><td>処理性能に影響するが、他関数から独立した400枠を取り分けない</td></tr></tbody></table></div>
+          <div class="ct-note"><strong>予約済み400の効果：</strong>「他の関数から守る」と同時に「この関数が400を超えて増えないようにする」です。起動の遅延も抑えたいという別の要件が加われば、プロビジョンド同時実行数の併用を検討します。</div>
+          <div data-quiz data-id="lambda-q-final" data-answer="b" data-explanation="この要件は同時実行枠の分離です。対象関数へ予約済み同時実行数400を設定し、他アプリケーションに使われない枠を確保します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+            <p class="font-semibold mb-3">Q10. 画像の要件に最も直接的に合う設定は？</p>
+            <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="lambda-q10" value="a"><span>DLQを作るだけにする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q10" value="b"><span>サムネイル関数の予約済み同時実行数を400にする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q10" value="c"><span>メモリを400MBへ設定する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q10" value="d"><span>CloudTrailの保存期間を延ばす</span></label></li></ul>
+            <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">5</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">次のステップ</h2></div>
+        <div class="grid sm:grid-cols-2 gap-5"><div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">公式資料で深める</h3><ul class="mt-4 text-sm text-sky-700 space-y-3"><li><a class="underline" href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-concurrency.html" target="_blank" rel="noopener">予約済み同時実行数の設定</a></li><li><a class="underline" href="https://docs.aws.amazon.com/lambda/latest/dg/provisioned-concurrency.html" target="_blank" rel="noopener">プロビジョンド同時実行数</a></li><li><a class="underline" href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-error-handling.html" target="_blank" rel="noopener">非同期実行の失敗と再試行</a></li></ul></div><div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">関連する教材</h3><ul class="mt-4 text-sm text-sky-700 space-y-3"><li><a class="underline" href="iam.html">IAM：実行ロールと操作権限</a></li><li><a class="underline" href="service-quotas.html">Service Quotas：アカウントの上限</a></li><li><a class="underline" href="cloudtrail.html">CloudTrail：設定変更の監査</a></li></ul></div></div>
+        <p class="text-xs text-slate-500 leading-relaxed mt-5">2026年10月29日にAWS公式資料を確認。本教材はイベント駆動型関数の通常のオンデマンド実行を中心に扱います。デモと設問はブラウザ内で動作し、AWSアカウントへの操作は行いません。</p>
+      </section>
+      <section id="missing-file-alarm" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">+</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">追加演習：イベントが来ないことを監視する</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <p class="ct-copy">S3への1時間ごとのファイル到着でLambdaが必ず起動する構成なら、<code>AWS/Lambda</code>の<code>Invocations</code>を1時間単位で合計し、「1未満」でアラームにします。呼び出しがない期間はデータ点自体がない場合があるため、欠損データを<code>breaching</code>として扱い、SNSへ通知します。</p>
+          <div class="ct-note mt-4"><strong>適用条件：</strong>同じ関数が別イベントでも起動する、店舗ごとの欠損を個別検知したい、遅着許容時間が異なる場合は、店舗ID別カスタムメトリクスやEventBridge Schedulerによる到着台帳確認へ発展させます。</div>
+          <div data-quiz data-id="lambda-q11" data-answer="b" data-explanation="既存の起動メトリクスを利用し、欠損データを異常として扱うのが最小構成です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q11. 1時間ごとのS3ファイル未達を追加実装最小で検知する設定は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="lambda-q11" value="a"><span>S3ライフサイクルの移行数を監視</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q11" value="b"><span>Invocationsが1未満、欠損をbreachingとするアラーム</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="lambda-q11" value="c"><span>SQSの最古メッセージだけを監視</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+        </div>
+      </section>
+    </article>
+  </main>
+  <script src="../../../assets/shared.js?v=20261029-7"></script>
+</body>
+</html>

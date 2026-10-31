@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ja" data-topic-id="cloud-aws-waf">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="AWS WAFによるXSSの緊急緩和、Web ACL、AWS Managed Rules、誤検知調整、ログ監視とアプリケーション側の恒久対策を学ぶ教材。">
+  <title>AWS WAF — XSSの緊急緩和と恒久対策 | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css?v=20261030-1">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"AWS WAF"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">通常版 · 約60分</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">AWS WAF — XSSの緊急緩和と恒久対策</h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">Webリクエストをレイヤー7で検査し、XSSなどの攻撃を入口で緩和します。同時に、WAFをコード修正の代わりにしないための境界も学びます。</p>
+
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">今回の設問の結論</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">速やかな緩和にはAWS WAFを導入し、XSSを検出するルールをWeb ACLへ追加して、CloudFrontやALBなどの入口へ関連付けます。</p>
+          <p class="ct-copy mt-2">AWS Managed RulesのCore rule set（<code>AWSManagedRulesCommonRuleSet</code>）には、リクエスト本文、Cookie、クエリ引数、URIパスなどの一般的なXSSパターンを検査するルールがあります。緊急遮断と並行して、保存済みデータの除去、文脈に応じた出力エンコード、HTMLサニタイズなどの恒久修正を進めます。</p>
+          <div class="ct-note mt-4"><strong>重要：</strong>AWS WAFは攻撃リクエストを入口で緩和する防御層です。アプリケーションのXSS脆弱性そのものを修正したり、すでにデータベースへ保存された悪意ある投稿を自動削除したりはしません。</div>
+          <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/waf/latest/developerguide/waf-chapter.html" target="_blank" rel="noopener">AWS WAFとは</a>、<a href="https://docs.aws.amazon.com/waf/latest/developerguide/aws-managed-rule-groups-baseline.html" target="_blank" rel="noopener">AWS Managed Rules — Core rule set</a></p>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500">
+            <li>格納型・反射型・DOM型XSSの違いと影響を説明する。</li>
+            <li>Web ACL、ルール、ルールグループ、優先順位、アクションを区別する。</li>
+            <li>CloudFront・ALB等へAWS WAFを関連付け、XSSルールを段階導入する。</li>
+            <li>COUNT、ログ、ラベル、スコープダウンで誤検知を調整する。</li>
+            <li>WAFによる緩和と、出力エンコード等の恒久対策を使い分ける。</li>
+          </ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">XSSとWAF</a><a href="#architecture" class="underline underline-offset-4">Web ACL設計</a><a href="#rules" class="underline underline-offset-4">XSSルール</a><a href="#operations" class="underline underline-offset-4">導入と運用</a><a href="#fix" class="underline underline-offset-4">恒久対策</a><a href="#case" class="underline underline-offset-4">総合演習</a></nav>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-6"><div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div><div class="tb-progress"><div data-progress-bar style="width:0%"></div></div><p class="mt-2 text-xs text-slate-500">10問の正解状況を、このブラウザに保存します。</p></div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編：XSSとAWS WAFの役割</h2><span class="tb-badge is-basic">基礎</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 XSSは「信頼できないデータを実行可能な形で出力する」問題</h3>
+            <div class="ct-flow" aria-label="格納型XSSが成立する流れ"><div><small>INPUT</small><strong>悪意ある投稿</strong><p>スクリプトを送信</p></div><div><small>STORE</small><strong>DBへ保存</strong><p>無害化されない</p></div><div><small>OUTPUT</small><strong>プロフィール表示</strong><p>HTMLへそのまま埋込</p></div><div><small>EXECUTE</small><strong>他者のブラウザ</strong><p>スクリプト実行</p></div></div>
+            <div class="ct-copy mt-4"><p>クロスサイトスクリプティング（XSS）は、信頼できない入力がHTMLやJavaScriptの文脈へ安全にエンコードされず出力され、閲覧者のブラウザで攻撃者のスクリプトとして実行される脆弱性です。今回の投稿欄のように、攻撃文字列が保存されて別の利用者へ配信されるものを格納型XSSと呼びます。</p><p>反射型XSSではURLやフォームの値が直後のレスポンスへ反映されます。DOM型XSSではクライアント側JavaScriptのsourceからsinkへの処理だけで成立する場合があり、悪意ある文字列がHTTPリクエスト上で明確に見えなければWAFだけでは防げません。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">種類</th><th scope="col">典型的な流れ</th><th scope="col">WAFの限界</th></tr></thead><tbody><tr><th scope="row">格納型</th><td>投稿→DB→別利用者へ表示</td><td>新規投入は緩和できるが、保存済みデータは残る</td></tr><tr><th scope="row">反射型</th><td>URL等→直後のレスポンス</td><td>既知パターンは検査可能だが回避表現がある</td></tr><tr><th scope="row">DOM型</th><td>ブラウザ内source→危険なsink</td><td>サーバーへのリクエストだけでは見えない場合がある</td></tr></tbody></table></div>
+            <div data-quiz data-id="waf-q1" data-answer="b" data-explanation="投稿内容が保存され、後で閲覧した他の利用者のブラウザで実行されるため、格納型XSSです。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q1. 投稿欄のスクリプトが保存され、別の利用者の閲覧時に実行されました。何型のXSSに近いですか？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="waf-q1" value="a"><span>反射型XSS</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q1" value="b"><span>格納型XSS</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q1" value="c"><span>SQLインジェクション</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q1" value="d"><span>DDoS</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 AWS WAFはHTTP(S)リクエストを入口で評価する</h3>
+            <div class="ct-copy"><p>AWS WAFは、保護対象へ転送されるHTTP(S)リクエストを評価するWeb Application Firewallです。IPアドレス、ヘッダー、Cookie、クエリ文字列、URI、リクエスト本文、送信レート、XSS・SQLiのような攻撃パターンなどを条件にできます。</p><p>一致したリクエストにはAllow、Block、Count、CAPTCHA、Challengeなどのアクションを適用できます。今回の緊急緩和では、XSSルールに一致する新しい投稿リクエストをBlockすることで、アプリケーションへ到達する前に攻撃入力を減らします。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/waf/latest/developerguide/waf-chapter.html" target="_blank" rel="noopener">AWS WAF</a></p>
+            <div data-quiz data-id="waf-q2" data-answer="c" data-explanation="AWS WAFは対応する入口でHTTP(S)リクエストをレイヤー7評価し、条件に応じてBlock等を適用します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q2. AWS WAFの役割として最も適切なものは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="waf-q2" value="a"><span>EC2間のTCP接続を負荷分散する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q2" value="b"><span>ユーザーのパスワードを保存する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q2" value="c"><span>Webリクエストをレイヤー7で検査し、条件に応じて遮断する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q2" value="d"><span>OSのパッチを自動適用する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="architecture" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">設計編：Web ACLと関連付け</h2><span class="tb-badge is-applied">応用</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 ルールをWeb ACLに束ね、保護対象へ関連付ける</h3>
+            <div class="ct-flow" aria-label="AWS WAFの評価フロー"><div><small>REQUEST</small><strong>HTTP(S)</strong><p>投稿・API呼出し</p></div><div><small>POLICY</small><strong>Web ACL</strong><p>優先順位で評価</p></div><div><small>RULES</small><strong>Managed / Custom</strong><p>XSS、IP、Rate等</p></div><div><small>ACTION</small><strong>Block / Allow</strong><p>またはCount等</p></div></div>
+            <div class="ct-table-wrap mt-4"><table class="ct-table"><thead><tr><th scope="col">部品</th><th scope="col">役割</th></tr></thead><tbody><tr><th scope="row">Web ACL</th><td>ルールを優先順位付きで束ね、既定アクションを持つ保護ポリシー</td></tr><tr><th scope="row">Rule</th><td>一致条件、可視化設定、実行するアクションを定義</td></tr><tr><th scope="row">Rule group</th><td>複数ルールを再利用可能なまとまりとして提供</td></tr><tr><th scope="row">AWS Managed Rules</th><td>AWSが作成・保守する既知脅威向けルールグループ</td></tr><tr><th scope="row">WCU</th><td>Web ACL Capacity Unit。ルール評価の必要容量を表す</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>AWS WAFは各ルールを数値の小さい優先順位から評価します。BlockやAllowのような終了アクションに一致すると評価を終了し、Countは記録・ラベル付けをして次のルールへ進みます。例外ルールを上位に置く場合は、意図せず攻撃通信までAllowしないようスコープを狭くします。</p></div>
+            <div data-fill data-id="waf-q3" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q3. ルールを優先順位付きで束ね、保護対象へ関連付けるものは？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="Web ACL|web acl|ウェブACL|ウェブ acl" aria-label="ルールを束ねるAWS WAFリソース" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 対応する入口とスコープを確認する</h3>
+            <div class="ct-copy"><p>Web ACLはCloudFrontディストリビューションや、リージョナルなApplication Load Balancer、API Gateway REST API、AppSync GraphQL API、Cognitoユーザープール、App Runner、Verified Accessなどの対応リソースへ関連付けます。Network Load BalancerにはWeb ACLを直接関連付けられません。</p><p>CloudFront用Web ACLとそのIP set・regex pattern set等はGlobal（CloudFront）スコープ、実体上は<code>us-east-1</code>で管理します。ALBなどリージョナルリソース用Web ACLは、保護対象と同じリージョンに作成します。1つの保護対象に関連付けられるWeb ACLは1つです。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">入口</th><th scope="col">直接関連付け</th><th scope="col">スコープ</th></tr></thead><tbody><tr><th scope="row">CloudFront</th><td>対応</td><td>Global（CloudFront）／us-east-1</td></tr><tr><th scope="row">ALB</th><td>対応</td><td>ALBと同じリージョン</td></tr><tr><th scope="row">API Gateway REST API</th><td>対応</td><td>APIと同じリージョン</td></tr><tr><th scope="row">NLB</th><td>非対応</td><td>—</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/waf/latest/developerguide/how-aws-waf-works-resources.html" target="_blank" rel="noopener">AWS WAFで保護できるリソース</a></p>
+            <div data-quiz data-id="waf-q4" data-answer="a,c" data-multiple data-explanation="CloudFrontとALBはWeb ACLを直接関連付けられます。NLBとEC2インスタンスには直接関連付けません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q4. AWS WAFのWeb ACLを直接関連付けられるものを2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="waf-q4" value="a"><span>CloudFrontディストリビューション</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="waf-q4" value="b"><span>Network Load Balancer</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="waf-q4" value="c"><span>Application Load Balancer</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="waf-q4" value="d"><span>EC2インスタンスのENI</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="rules" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：XSSルールの選択と限界</h2><span class="tb-badge is-applied">応用</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 まずCore rule set、必要ならXSS match statement</h3>
+            <div class="ct-copy"><p><code>AWSManagedRulesCommonRuleSet</code>は一般的なWeb脅威に対するベースラインで、<code>CrossSiteScripting_BODY</code>、<code>CrossSiteScripting_COOKIE</code>、<code>CrossSiteScripting_QUERYARGUMENTS</code>、<code>CrossSiteScripting_URIPATH</code>などを含みます。管理ルールは継続的に保守されるため、緊急緩和の出発点に適しています。</p><p>独自フォームやAPIに絞る場合はXSS match statementで検査対象の本文、JSON body、Cookie、ヘッダー、クエリ等を指定し、URLデコードやHTML entity decodeのようなtext transformationを順序付きで適用できます。パスやHTTPメソッドとAND条件で組み合わせれば、投稿APIだけを狙ったルールにできます。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/waf/latest/developerguide/aws-managed-rule-groups-baseline.html" target="_blank" rel="noopener">Core rule set</a>、<a href="https://docs.aws.amazon.com/waf/latest/developerguide/waf-rule-statement-type-xss-match.html" target="_blank" rel="noopener">XSS attack rule statement</a></p>
+            <div data-quiz data-id="waf-q5" data-answer="d" data-explanation="AWSManagedRulesCommonRuleSetには一般的なXSS検査ルールが含まれ、緊急緩和の開始点になります。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q5. 一般的なXSSパターンを速やかに検査する開始点として適切なのは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="waf-q5" value="a"><span>AWS Shield Standardだけを有効にする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q5" value="b"><span>Cognitoへユーザーを移行する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q5" value="c"><span>ALBのターゲット数を増やす</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q5" value="d"><span>AWSManagedRulesCommonRuleSetをWeb ACLへ追加する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 「検査できるリクエスト範囲」を設計する</h3>
+            <div class="ct-copy"><p>AWS WAFが検査するのはWebリクエストです。レスポンス本文をサニタイズするプロキシではありません。さらにBody、JSON body、Headers、Cookiesには検査できるサイズの上限があり、上限を超えた部分をどう扱うかというoversize handlingをルールごとに設計します。</p><p>格納型XSSでは、WAFを導入する前に保存された悪意ある投稿はデータベースに残っています。対象レコードを特定して安全に除去し、キャッシュも無効化します。WAFのログに本文やCookie等が含まれ得るため、機密フィールドのredaction、データ保護、保存期間、アクセス権も設定します。</p></div>
+            <div class="ct-note"><strong>WAFは完全なHTMLパーサーではありません。</strong>難読化やアプリ固有の形式、クライアント側だけで成立するDOM型XSS、検査上限を超える本文などを100%防ぐ保証はありません。防御層として活用し、アプリ修正を省略しないでください。</div>
+            <div data-quiz data-id="waf-q6" data-answer="b" data-explanation="AWS WAFは受信Webリクエストを検査します。導入前からDBに保存されている攻撃文字列は別途調査・除去が必要です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q6. WAF導入前にデータベースへ保存された悪意ある投稿への対応は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="waf-q6" value="a"><span>WAFが自動的にDBから削除する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q6" value="b"><span>対象データを調査・除去し、出力側の修正も行う</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q6" value="c"><span>ALBをNLBへ変更すれば無害化される</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q6" value="d"><span>Shield Standardがレスポンスをサニタイズする</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="operations" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：速やかで安全な導入</h2><span class="tb-badge is-prac">実務</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.1 Countで観測し、緊急度に合わせてBlockへ移す</h3>
+            <ol class="ct-steps"><li><strong>攻撃経路と保護対象を特定</strong><p>CloudFront、ALB、REST API等のどこへWeb ACLを関連付けるか確認します。</p></li><li><strong>Web ACLと管理ルールを追加</strong><p>Core rule setを追加し、投稿APIのパスやメソッドで必要に応じてスコープを絞ります。</p></li><li><strong>短時間Countで確認</strong><p>サンプルリクエスト、CloudWatchメトリクス、ログで正常投稿が一致しないか確認します。</p></li><li><strong>Blockへ切り替える</strong><p>侵害が進行中なら観測時間を最小化し、対象XSSルールをBlockへ移して監視します。</p></li><li><strong>例外は狭く作る</strong><p>ルール全体を無効化せず、誤検知するパス・項目・条件だけを除外します。</p></li><li><strong>アプリ修正とデータ調査</strong><p>根本原因を修正し、保存済み攻撃データとセッション侵害の有無を調査します。</p></li></ol>
+            <div class="ct-copy mt-4"><p>ルールグループのアクションをCountへオーバーライドすると、遮断せず一致数とラベルを観測できます。これは誤検知の評価に有効ですが、Count中は攻撃を止めません。侵入テストで再現済みかつ悪用が疑われる場合は、影響範囲の小さいルールから速やかにBlockへ移します。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/waf/latest/developerguide/waf-dg.pdf" target="_blank" rel="noopener">AWS WAF Developer Guide — rule action override</a></p>
+            <div class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q7. 安全な導入順へ並べ替えてください。</p><ul data-sortable data-id="waf-q7" data-answer="scope,count,review,block,fix" class="tb-sortable"><li data-id="block">対象ルールをBlockへ移す</li><li data-id="scope">保護対象と攻撃経路を特定する</li><li data-id="fix">アプリ修正と保存済みデータの調査を進める</li><li data-id="review">ログとメトリクスで誤検知を確認する</li><li data-id="count">Web ACLへルールをCountで追加する</li></ul><p data-sortable-feedback class="text-sm text-slate-500 mt-3">ドラッグまたは矢印ボタンで変更すると判定します。</p></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.2 ログ・メトリクス・サンプルで調整する</h3>
+            <div class="ct-copy"><p>各ルールとWeb ACLではCloudWatchメトリクスとサンプルリクエストを確認できます。詳細ログはCloudWatch Logs、Amazon S3、Amazon Data Firehoseへ送れます。Block数の急増、特定URI・国・IP・User-Agentへの偏り、管理ルールが付けたラベルを継続監視します。</p><p>ログには認証情報、Cookie、クエリ、個人情報が含まれ得ます。ログフィルターで必要なアクションだけを保存し、field redactionやデータ保護を設定し、KMS暗号化、最小権限、保存期間を整えます。ログ自体を新しい情報漏えい源にしないことが重要です。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">観測</th><th scope="col">用途</th></tr></thead><tbody><tr><th scope="row">AllowedRequests / BlockedRequests</th><td>全体傾向と急増を把握</td></tr><tr><th scope="row">CountedRequests</th><td>遮断前の影響評価</td></tr><tr><th scope="row">Rule labels</th><td>どの管理ルールが一致したかを特定</td></tr><tr><th scope="row">Full logs</th><td>条件調整とインシデント調査。機密情報に注意</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/waf/latest/developerguide/logging-management.html" target="_blank" rel="noopener">AWS WAFログの管理</a></p>
+            <div data-quiz data-id="waf-q8" data-answer="a,c" data-multiple data-explanation="Countで本番影響を観測し、ログの機密情報はredactionやデータ保護で扱います。ログを無制限に保存したり全ルールを即Allowしたりはしません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q8. 誤検知を安全に調整する方法を2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="waf-q8" value="a"><span>Countで一致状況を観測してからBlockを判断する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="waf-q8" value="b"><span>誤検知が1件あればWeb ACL全体を削除する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="waf-q8" value="c"><span>ログの機密フィールドをredactし、該当ルールとパスを絞る</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="waf-q8" value="d"><span>正常通信も含め永久に全本文を無制限保存する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="fix" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">5</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">恒久対策：アプリケーションでXSSをなくす</h2><span class="tb-badge is-prac">実務</span></div>
+        <div class="tb-card p-5 sm:p-7">
+          <h3 class="text-lg font-bold text-sky-900 mb-3">5.1 WAFの後ろで修正すべきこと</h3>
+          <div class="grid sm:grid-cols-2 gap-4"><div class="rounded-2xl bg-emerald-50 p-5"><p class="font-bold text-emerald-950">最優先の根本対策</p><ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-emerald-950/80"><li>HTML・属性・URL・JavaScriptの文脈ごとに出力エンコード</li><li>HTMLを許可する投稿は信頼できるライブラリでallowlistサニタイズ</li><li><code>innerHTML</code>等の危険なsinkを避け、安全なDOM APIを使用</li><li>テンプレートエンジンの自動エスケープを無効化しない</li></ul></div><div class="rounded-2xl bg-sky-50 p-5"><p class="font-bold text-sky-950">被害を抑える多層防御</p><ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700"><li>Content Security Policy（CSP）を段階導入</li><li>セッションCookieへHttpOnly・Secure・SameSite</li><li>セッションの失効、再認証、侵害調査</li><li>SAST・DAST・依存関係検査と回帰テスト</li></ul></div></div>
+          <div class="ct-copy mt-4"><p>入力検証は業務上許可する形式を狭めるために有効ですが、XSSの中心的な対策は「出力先の文脈に合ったエンコード」です。単純に<code>&lt;script&gt;</code>文字列を削除するだけでは、イベント属性、SVG、URLスキーム、エンコード表現などを使う回避に耐えられません。</p><p>HttpOnlyはJavaScriptからCookie値を直接読むことを難しくしますが、悪意あるスクリプトが利用者として操作することまでは止めません。CSPも強力な補助策ですが、適切なnonce／hash設計や既存スクリプトの整理が必要で、出力エンコードの代替ではありません。</p></div>
+          <div data-quiz data-id="waf-q9" data-answer="d" data-explanation="XSSの恒久対策は、出力される文脈に応じたエンコードと、必要な場合の安全なHTMLサニタイズです。WAFやCookie属性は多層防御です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q9. XSSの恒久対策として最も重要なのは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="waf-q9" value="a"><span>EC2の台数を増やす</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q9" value="b"><span>Shield Standardだけを有効にする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q9" value="c"><span>すべての投稿からscriptという文字だけを削除する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q9" value="d"><span>出力文脈に応じたエンコードと、必要なHTMLの安全なサニタイズを実装する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">6</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：リリース直後に見つかった格納型XSS</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <div class="ct-copy"><p>新しいプロフィールページの投稿欄へ入力したスクリプトが、別の利用者のブラウザで実行されました。コード修正を待たずに攻撃入力を入口で抑え、並行して根本修正を進める必要があります。</p></div>
+          <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">選択肢</th><th scope="col">判定</th><th scope="col">理由</th></tr></thead><tbody><tr><th scope="row">Elastic Load Balancing</th><td>不正解</td><td>負荷分散が役割。ALBはWAFの関連付け先にはなるが、ELB単独でXSS検査はしない</td></tr><tr><th scope="row">AWS WAF</th><td>正解</td><td>HTTP(S)リクエストのXSSパターンを入口で検査・Blockできる</td></tr><tr><th scope="row">Amazon Cognito</th><td>不正解</td><td>認証・ユーザーディレクトリであり、投稿本文をXSS検査しない</td></tr><tr><th scope="row">AWS Shield Standard</th><td>不正解</td><td>一般的なL3/L4 DDoS保護であり、XSS入力の検査ではない</td></tr></tbody></table></div>
+          <div class="ct-note"><strong>選択問題と実務の差：</strong>選択肢の中ではAWS WAFが即時緩和の正解です。実務では、ルール適用だけで完了扱いにせず、保存済みデータの除去、セッション失効、ログ調査、コード修正、回帰テストを並行します。</div>
+          <div data-quiz data-id="waf-q10" data-answer="b" data-explanation="AWS WAFは対応するWeb入口でXSSパターンを含むリクエストを検査・遮断でき、コード修正までの緊急緩和に適しています。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q10. このXSSを速やかに緩和するために導入すべきAWSサービスは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="waf-q10" value="a"><span>Elastic Load Balancing</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q10" value="b"><span>AWS WAF</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q10" value="c"><span>Amazon Cognito</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="waf-q10" value="d"><span>AWS Shield Standard</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+        </div>
+      </section>
+
+      <section class="tb-card p-5 sm:p-7">
+        <h2 class="text-xl font-bold text-sky-950">覚えておく3行</h2>
+        <ul class="mt-4 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500"><li>XSSの即時緩和はAWS WAF。対応するWeb入口へWeb ACLとXSSルールを関連付ける。</li><li>Countとログで影響を確認し、侵害の緊急度に応じて狭い範囲からBlockへ移す。</li><li>WAFは根本修正ではない。保存済みデータを除去し、文脈別出力エンコードとサニタイズを実装する。</li></ul>
+        <p class="ct-source mt-5">公式仕様確認日：2026-10-30</p>
+      </section>
+    </article>
+
+    <section class="mt-12"><h2 class="text-xl font-bold text-sky-950 mb-4">次のステップ</h2><div class="tb-card p-5 sm:p-6"><ul class="space-y-3 text-sm text-slate-700"><li><a class="text-sky-700 underline" href="route53-cloudfront.html">Amazon Route 53 × CloudFront</a>：CloudFrontへの独自ドメイン接続とキャッシュを学ぶ。</li><li><a class="text-sky-700 underline" href="alb-nlb.html">ALB / NLB</a>：AWS WAFを直接関連付けられるALBと、L4のNLBを比較する。</li><li><a class="text-sky-700 underline" href="network-firewall.html">AWS Network Firewall</a>：VPC経路上のDPIとWAFの違いを学ぶ。</li><li><a class="text-sky-700 underline" href="https://docs.aws.amazon.com/waf/latest/developerguide/" target="_blank" rel="noopener">AWS公式：AWS WAF Developer Guide</a></li></ul></div></section>
+    <div class="mt-10 text-center"><a href="../../../index.html" class="inline-block rounded-full bg-white text-sky-700 ring-1 ring-sky-200 px-6 py-3 text-sm font-semibold">← 教材一覧へ</a></div>
+  </main>
+
+  <footer class="text-center text-xs text-slate-400 pb-10">Engineer Textbook · AWS WAF · 公式資料確認：2026-10-30</footer>
+  <script src="../../../assets/shared.js?v=20261030-1"></script>
+</body>
+</html>

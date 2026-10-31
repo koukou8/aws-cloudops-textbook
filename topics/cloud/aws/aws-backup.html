@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ja" data-topic-id="cloud-aws-backup">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="AWS BackupによるRDS・EC2・EFSの一元保護、継続バックアップ、PITR、クロスリージョンコピー、Vault Lockを学ぶ通常版教材。">
+  <title>AWS Backup | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"AWS Backup"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">通常版 · 約50分</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">AWS Backup</h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">RDS、EC2、EFSなどの保護を、バックアッププラン・保管庫・復元テストまで一元管理する。RDS PostgreSQLの28日PITRとクロスリージョン災害復旧を題材に学びます。</p>
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">今回の設問の結論</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">AWS Backupを選び、目的の違う2つのルールを1つのバックアッププランで管理します。</p>
+          <div class="ct-flow mt-5" aria-label="推奨バックアップ設計">
+            <div><small>RULE A · SOURCE</small><strong>継続バックアップ</strong><p>28日保持。誤削除前へのPITR</p></div>
+            <div><small>RULE B · PERIODIC</small><strong>定期スナップショット</strong><p>復旧点をスケジュール作成</p></div>
+            <div><small>COPY ACTION</small><strong>別リージョンへコピー</strong><p>リージョン障害時の復旧点</p></div>
+          </div>
+          <div class="ct-note"><strong>重要：</strong>継続バックアップを別リージョンへコピーしても、コピー先ではPITR可能な継続バックアップではなく、コピー時点のスナップショットになります。ソース側PITRと別リージョンDRを分けて設計します。</div>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500"><li>バックアッププラン、ルール、選択、保管庫、復旧ポイントの関係を説明する。</li><li>定期スナップショットと継続バックアップ／PITRを使い分ける。</li><li>クロスリージョンコピー、Vault Lock、復元テストをRTO・RPOへ結び付ける。</li></ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">基本構造</a><a href="#rds" class="underline underline-offset-4">RDS保護</a><a href="#operations" class="underline underline-offset-4">統制と運用</a><a href="#case" class="underline underline-offset-4">設問演習</a></nav>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-6"><div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div><div class="tb-progress"><div data-progress-bar style="width:0%"></div></div><p class="mt-2 text-xs text-slate-500">10問の正解状況を、このブラウザに保存します。</p></div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編：バックアップをポリシーで管理する</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 5つの構成要素</h3>
+            <div class="ct-copy"><p>AWS Backupは、対応するAWSリソースのバックアップを集中管理するサービスです。バックアッププランにスケジュールや保持期間を定義し、タグまたはリソースIDで対象を選択します。作成された復旧ポイントはバックアップボールト（保管庫）へ保存されます。</p><p>「毎日取得」「28日保持」「別リージョンへコピー」といった要件はルールへ記述します。対象が増えたときは、たとえば <code>Backup=Daily</code> のタグで自動的に同じ方針へ参加させられます。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>要素</th><th>役割</th></tr></thead><tbody><tr><th>バックアッププラン</th><td>保護方針をまとめるコンテナ</td></tr><tr><th>バックアップルール</th><td>頻度、開始時間、保持期間、コピー先を定義</td></tr><tr><th>リソース選択</th><td>タグまたはIDで対象を指定</td></tr><tr><th>バックアップボールト</th><td>復旧ポイントを保管し、アクセスを制御</td></tr><tr><th>復旧ポイント</th><td>復元に使うバックアップ成果物</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/aws-backup/latest/devguide/about-backup-plans.html" target="_blank" rel="noopener">AWS Backupプラン</a></p>
+            <div data-quiz data-id="backup-q1" data-answer="b" data-explanation="頻度・保持期間・コピー先はバックアッププラン内のルールで定義します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q1. 「毎日取得し、28日保持する」を主に定義する場所は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="backup-q1" value="a"><span>セキュリティグループ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q1" value="b"><span>バックアッププランのルール</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q1" value="c"><span>VPCルートテーブル</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q1" value="d"><span>リードレプリカ</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 定期バックアップと継続バックアップ</h3>
+            <div class="ct-copy"><p>定期バックアップは、決めた時刻にスナップショット型の復旧ポイントを作ります。復元できるのは取得時点です。継続バックアップは、対応するRDSリソースなどの変更履歴を保持し、保持期間内の指定時点へ戻すPITRを提供します。</p><p>AWS Backupで作成したRDSの定期バックアップはRDS側では手動スナップショットとして、継続バックアップは自動バックアップとして扱われます。継続バックアップの保持期間は1〜35日なので、28日は設定できます。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>方式</th><th>復元できる時点</th><th>代表用途</th></tr></thead><tbody><tr><th>定期スナップショット</th><td>取得した各時点</td><td>日次保全、長期保持、別リージョンコピー</td></tr><tr><th>継続バックアップ</th><td>保持期間内の指定時点</td><td>誤削除・誤更新前へのPITR</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/aws-backup/latest/devguide/rds-backup.html" target="_blank" rel="noopener">AWS BackupによるRDSバックアップ</a>、<a href="https://docs.aws.amazon.com/aws-backup/latest/devguide/point-in-time-recovery.html" target="_blank" rel="noopener">継続バックアップとPITR</a></p>
+            <div data-quiz data-id="backup-q2" data-answer="c" data-explanation="誤削除直前など、保持期間内の時刻を指定して復元するには継続バックアップのPITRを使います。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q2. 11:42の誤削除直前へ戻したい。適切な機能は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="backup-q2" value="a"><span>リードレプリカの昇格</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q2" value="b"><span>セキュリティグループの複製</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q2" value="c"><span>継続バックアップのPITR</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q2" value="d"><span>CloudTrailのログ検索</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+            <div data-fill data-id="backup-q3" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q3. 継続バックアップで、保持期間内の指定時点へ復元する機能の略称は？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="PITR|ポイントインタイムリカバリ|ポイントインタイム復旧" aria-label="指定時点への復元機能" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="rds" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：RDSを28日保護し、別リージョンへ備える</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 同じプランに目的別の2ルールを置く</h3>
+            <div class="ct-copy"><p>ソースのap-southeast-2では継続バックアップを28日保持し、誤削除前の時刻へPITRできるようにします。災害復旧用には定期スナップショットを作り、コピーアクションで別リージョンのボールトへ複製します。</p><p>バックアッププランには複数のルールを置けます。ルールごとにスケジュール、保持期間、ボールト、コピーアクションを分ければ、「細かい時点復旧」と「地域障害への退避」を一元管理できます。</p></div>
+            <div class="ct-flow"><div><small>RULE A</small><strong>Continuous · 28 days</strong><p>ソースリージョンのPITR</p></div><div><small>RULE B</small><strong>Daily snapshot</strong><p>災害復旧の復旧点を作成</p></div><div><small>COPY</small><strong>Destination vault</strong><p>別リージョンへ自動複製</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/aws-backup/latest/devguide/understanding-backup-plan-summaries.html" target="_blank" rel="noopener">バックアッププランの概要</a>、<a href="https://docs.aws.amazon.com/aws-backup/latest/devguide/cross-region-backup.html" target="_blank" rel="noopener">クロスリージョンコピー</a></p>
+            <div data-quiz data-id="backup-q4" data-answer="a" data-explanation="継続バックアップを28日保持すれば、対応するRDSを保持期間内の指定時点へ復元できます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q4. ソースリージョンで28日間の誤操作復旧を実現するルールは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="backup-q4" value="a"><span>継続バックアップを有効にし、保持期間を28日にする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q4" value="b"><span>リードレプリカだけを作る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q4" value="c"><span>バックアップを5日で削除する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q4" value="d"><span>DBをパブリック公開する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 コピー先の復旧点はPITRではない</h3>
+            <div class="ct-copy"><p>継続バックアップをリージョン間またはアカウント間でコピーすると、コピー先にはコピー時点のスナップショット型復旧ポイントが作られます。継続バックアップのログ履歴がそのまま移るわけではないため、コピー先で任意時刻のPITRはできません。</p><p>したがってRPOは別々に考えます。ソース側の誤操作RPOは継続バックアップ、リージョン障害時のRPOは定期スナップショットとコピー頻度で決まります。</p></div>
+            <div class="ct-note"><strong>試験対策：</strong>「AWS Backup＋クロスリージョンコピー」は正解の方向ですが、「コピー先でも28日間のPITRができる」と読み替えないこと。DR側はコピー済み復旧ポイントの時刻へ戻します。</div>
+            <div data-quiz data-id="backup-q5" data-answer="d" data-explanation="継続バックアップをコピーすると、コピー先ではコピー時点のスナップショットになります。PITRは引き継がれません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q5. 継続バックアップを別リージョンへコピーした結果として正しいものは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="backup-q5" value="a"><span>コピー先でも同じ期間のPITRが自動的に可能</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q5" value="b"><span>元のDBが別リージョンへ移動する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q5" value="c"><span>リードレプリカへ変換される</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q5" value="d"><span>コピー時点のスナップショット型復旧ポイントになる</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+            <div data-quiz data-id="backup-q6" data-answer="b" data-explanation="リージョン障害時のデータ損失幅は、DR用スナップショットを作成・コピーする頻度に強く左右されます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q6. 別リージョンDRのRPOへ最も直接影響するものは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="backup-q6" value="a"><span>RDSのインスタンス名</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q6" value="b"><span>スナップショットの取得・コピー頻度</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q6" value="c"><span>VPCの名前</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q6" value="d"><span>IAMユーザー数</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.3 4つの選択肢を比較する</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>方式</th><th>強み</th><th>今回不足する点</th></tr></thead><tbody><tr><th>AWS Backup</th><td>複数サービス、PITR、コピー、保持を一元管理</td><td>機能対応表とコピー先PITRの制約を確認</td></tr><tr><th>RDSネイティブ自動バックアップ</th><td>1〜35日保持、PITR、クロスリージョン複製</td><td>EC2・EFSを同じ仕組みで管理できない</td></tr><tr><th>クロスリージョンリードレプリカ</th><td>読み取り分散、昇格によるDR</td><td>誤削除も複製され、過去時点を保持しない</td></tr><tr><th>手動スナップショット</th><td>任意時点を明示保存</td><td>取得・コピー・削除が手作業で、PITRではない</td></tr></tbody></table></div>
+            <p class="ct-copy mt-4">RDS単体ならネイティブ機能も有力です。しかし今回の決め手は、将来EC2やEFSまで同じ方針と管理画面で保護する要件です。サービスごとに対応するバックアップ機能は異なるため、導入前にAWS Backupの機能対応表を確認します。</p>
+            <div data-quiz data-id="backup-q7" data-answer="c" data-explanation="リードレプリカは変更を複製するため誤削除も伝播します。過去時点へ戻すバックアップの代替ではありません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q7. クロスリージョンリードレプリカが誤削除対策にならない主な理由は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="backup-q7" value="a"><span>SQLを実行できないから</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q7" value="b"><span>別リージョンへ作れないから</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q7" value="c"><span>誤削除もレプリカへ複製されるから</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q7" value="d"><span>常に35日前の状態だから</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="operations" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：権限、暗号化、改ざん耐性、復元訓練</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 タグ、IAMロール、KMS</h3>
+            <div class="ct-copy"><p>対象はリソースIDで明示するか、タグで動的に選択します。タグ方式なら新しいEC2やEFSを同じ保護方針へ追加しやすい一方、タグ漏れをAWS Configなどで検出する統制が必要です。</p><p>AWS Backupはサービスロールの権限で各リソースを操作します。最小権限、バックアップボールトのアクセスポリシー、KMSキーの利用権限を合わせて設計します。クロスアカウントやクロスリージョンでは、コピー先ボールトと暗号化キーの権限も確認します。</p></div>
+            <div data-quiz data-multiple data-id="backup-q8" data-answer="a,d" data-explanation="タグによる対象選択は拡張しやすく、サービスロール・ボールト・KMSの権限設計が必要です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q8. 複数サービスへ安全に拡張する設計として適切なものを2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="backup-q8" value="a"><span>保護対象をタグで選び、タグ漏れを検出する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="backup-q8" value="b"><span>全IAMユーザーへバックアップ削除権限を付与する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="backup-q8" value="c"><span>KMSキーの権限を無視する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="backup-q8" value="d"><span>サービスロールとボールト・KMS権限を最小化する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 Backup Vault LockとWORM</h3>
+            <div class="ct-copy"><p>Backup Vault LockはバックアップボールトへWORM（Write Once Read Many）制御を適用し、保持期間中の削除や保持期間の短縮を防ぎます。ガバナンスモードは適切な権限で変更できます。コンプライアンスモードは猶予期間を過ぎると、顧客のrootを含めてロックを変更・削除できません。</p><p>ランサムウェアや内部不正への耐性を高めますが、誤った最小・最大保持期間を固定すると修正できず、保存コストも継続します。別ボールトで検証し、変更可能な猶予期間を設けてから本番化します。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/aws-backup/latest/devguide/vault-lock.html" target="_blank" rel="noopener">AWS Backup Vault Lock</a></p>
+            <div data-quiz data-id="backup-q9" data-answer="b" data-explanation="コンプライアンスモードは猶予期間後に不変となるため、保持設定とコストを十分検証してから使います。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q9. Vault Lockのコンプライアンスモードで特に注意することは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="backup-q9" value="a"><span>復旧ポイントを誰でも削除できる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q9" value="b"><span>猶予期間後はロックを変更・削除できない</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q9" value="c"><span>バックアップが暗号化されなくなる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q9" value="d"><span>RDSが自動的にリードレプリカへ変わる</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.3 バックアップ成功ではなく、復旧成功を測る</h3>
+            <div class="ct-copy"><p>バックアップジョブの成功だけでは、アプリケーションが復旧できる保証になりません。定期的に隔離環境へ復元し、DBの整合性、接続、アプリ動作、DNSやシークレットの切替手順を確認します。AWS Backupの復元テスト機能に対応するリソースでは、スケジュール化も検討します。</p><p>RPOは「どこまでのデータ損失を許容するか」、RTOは「いつまでに業務を再開するか」です。スナップショット頻度はRPOへ、復元・検証・切替にかかる時間はRTOへ反映します。</p></div>
+            <div class="ct-flow"><div><small>RESTORE</small><strong>隔離環境へ復元</strong><p>本番を上書きしない</p></div><div><small>VALIDATE</small><strong>整合性とアプリを検証</strong><p>SQL、接続、権限を確認</p></div><div><small>MEASURE</small><strong>RTO・RPOを更新</strong><p>実測値を手順と監視へ反映</p></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：RDS PostgreSQLの保護設計</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <div class="ct-copy"><p>ap-southeast-2のRDS PostgreSQLは、自動バックアップ5日、リードレプリカなし、手動スナップショットなしです。要件は、別リージョンへの復旧、28日保持、誤削除からの迅速な復旧、将来のEC2・EFSを含む一元管理です。</p><p>4つすべてを満たす軸はAWS Backupです。継続バックアップでソース側PITRを28日保持し、定期スナップショットのコピーアクションで別リージョンへDR用復旧点を作ります。</p></div>
+          <div data-quiz data-id="backup-q10" data-answer="a" data-explanation="AWS Backupなら複数サービスを一元管理できます。正確には、ソース側の28日PITR用継続バックアップと、別リージョンDR用スナップショットコピーを目的別ルールで構成します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q10. すべての要件を満たす最も適切な方針は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="backup-q10" value="a"><span>AWS Backupプランで28日PITRとクロスリージョンコピーを目的別ルールとして管理する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q10" value="b"><span>RDSの自動バックアップだけを28日に変更する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q10" value="c"><span>クロスリージョンリードレプリカだけを作る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="backup-q10" value="d"><span>手動スナップショットを都度取得・コピーする</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          <div class="ct-note"><strong>覚え方：</strong>「戻す時刻」はPITR。「地域障害」はコピー。「サービス横断」はAWS Backup。「削除させない」はVault Lock。「本当に戻るか」は復元テストです。</div>
+        </div>
+      </section>
+    </article>
+
+    <section class="mt-12"><h2 class="text-xl font-bold text-sky-950 mb-4">次のステップ</h2><div class="tb-card p-5 sm:p-6"><ul class="space-y-3 text-sm text-slate-700"><li><a class="text-sky-700 underline" href="rds.html">Amazon RDS</a>：自動バックアップ、PITR、Multi-AZを理解する。</li><li><a class="text-sky-700 underline" href="ec2.html">Amazon EC2</a>：AMI・EBSとファイルシステム整合性を理解する。</li><li><a class="text-sky-700 underline" href="iam.html">IAM</a>：サービスロールと最小権限を設計する。</li><li><a class="text-sky-700 underline" href="https://docs.aws.amazon.com/aws-backup/latest/devguide/whatisbackup.html" target="_blank" rel="noopener">AWS公式：AWS Backup</a></li></ul></div></section>
+    <div class="mt-10 text-center"><a href="../../../index.html" class="inline-block rounded-full bg-white text-sky-700 ring-1 ring-sky-200 px-6 py-3 text-sm font-semibold shadow-sm">← 通常版の教材一覧へ</a></div>
+  </main>
+  <footer class="text-center text-xs text-slate-400 pb-10">Engineer Textbook · AWS Backup · 公式資料確認：2026-10-29</footer>
+  <script src="../../../assets/shared.js?v=20261029-12"></script>
+</body>
+</html>

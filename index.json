@@ -1,0 +1,262 @@
+{
+  "site": {
+    "title": "Engineer Textbook",
+    "subtitle": "ブラウザで学ぶ、エンジニアの教科書"
+  },
+  "categories": [
+    {
+      "id": "cloud",
+      "name": "クラウド",
+      "iconEmoji": "☁️",
+      "children": [
+        {
+          "id": "aws",
+          "name": "AWS",
+          "children": [
+            {
+              "id": "cloud-aws-vpc-flow-logs",
+              "name": "VPCフローログ",
+              "path": "topics/cloud/aws/vpc-flow-logs.html",
+              "summary": "通信記録、ログ未作成の切り分け、NACLのステートレス動作",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 50,
+              "createdAt": "2026-10-29",
+              "updatedAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-elasticache",
+              "name": "Amazon ElastiCache",
+              "path": "topics/cloud/aws/elasticache.html",
+              "summary": "キャッシュの基本、Redis OSSクラスターモード、オンラインリシャーディング、Multi-AZ、監視と費用最適化",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 70,
+              "createdAt": "2026-10-29",
+              "updatedAt": "2026-10-30"
+            },
+            {
+              "id": "cloud-aws-service-quotas",
+              "name": "AWS Service QuotasとVPC上限",
+              "path": "topics/cloud/aws/service-quotas.html",
+              "summary": "アカウント・リージョン単位の上限と実務運用",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 55,
+              "createdAt": "2026-10-29"
+            },
+            {
+              "id": "cloud-aws-systems-manager",
+              "name": "AWS Systems Manager",
+              "path": "topics/cloud/aws/systems-manager.html",
+              "summary": "パッチ運用、継続配布、CloudWatch Agent設定統一、イベント自動化",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 70,
+              "createdAt": "2026-10-29",
+              "updatedAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-cloudtrail",
+              "name": "AWS CloudTrail",
+              "path": "topics/cloud/aws/cloudtrail.html",
+              "summary": "操作履歴、S3データイベント、Insights、ログ整合性の検証",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 50,
+              "createdAt": "2026-10-29",
+              "updatedAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-cloudwatch-synthetics",
+              "name": "Amazon CloudWatch Synthetics",
+              "path": "topics/cloud/aws/cloudwatch-synthetics.html",
+              "summary": "Canaryによるリンク切れ・表示内容・重要導線のユーザー視点監視とアラーム運用",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 55,
+              "createdAt": "2026-10-30",
+              "updatedAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-iam",
+              "name": "AWS IAMと社内認証の連携",
+              "path": "topics/cloud/aws/iam.html",
+              "summary": "認証・認可、ロール、ポリシーとIAM Identity CenterのSAML連携",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 55,
+              "createdAt": "2026-10-29",
+              "updatedAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-control-tower",
+              "name": "AWS Control TowerとOrganizations",
+              "path": "topics/cloud/aws/control-tower.html",
+              "summary": "ランディングゾーン、ベースライン、SCPと承認リージョンの予防的統制",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 55,
+              "createdAt": "2026-10-30"
+            },
+            {
+              "id": "cloud-aws-lambda",
+              "name": "AWS Lambdaと同時実行制御",
+              "path": "topics/cloud/aws/lambda.html",
+              "summary": "イベント駆動、同時実行制御、再試行とイベント未達監視",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 55,
+              "createdAt": "2026-10-29",
+              "updatedAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-alb-nlb",
+              "name": "ALB / NLBの使い分け",
+              "path": "topics/cloud/aws/alb-nlb.html",
+              "summary": "ALB/NLBの選択、固定IP、ヘルスチェック、セッション維持",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 35,
+              "createdAt": "2026-10-29",
+              "updatedAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-route53-cloudfront",
+              "name": "Amazon Route 53 × CloudFront",
+              "path": "topics/cloud/aws/route53-cloudfront.html",
+              "summary": "位置情報などRoute 53ルーティングポリシー、独自ドメイン接続、Origin Shieldとキャッシュ最適化",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 80,
+              "createdAt": "2026-10-30",
+              "updatedAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-auto-scaling",
+              "name": "Amazon EC2 Auto Scaling",
+              "path": "topics/cloud/aws/auto-scaling.html",
+              "summary": "起動テンプレート、ターゲット追跡、予定スケーリング、複数AZ運用",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 40,
+              "createdAt": "2026-10-29",
+              "updatedAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-s3",
+              "name": "Amazon S3",
+              "path": "topics/cloud/aws/s3.html",
+              "summary": "オブジェクト保存、アクセス制御、ライフサイクルとTransfer Accelerationによる長距離アップロード最適化",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 50,
+              "createdAt": "2026-10-29",
+              "updatedAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-rds",
+              "name": "Amazon RDS",
+              "path": "topics/cloud/aws/rds.html",
+              "summary": "Multi-AZ、ストレージ性能、Aurora Global Database、PITRとバックトラック",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 75,
+              "createdAt": "2026-10-29",
+              "updatedAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-backup",
+              "name": "AWS Backup",
+              "path": "topics/cloud/aws/aws-backup.html",
+              "summary": "RDS・EC2・EFSの一元保護、PITR、クロスリージョンコピーとVault Lock",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 50,
+              "createdAt": "2026-10-29"
+            },
+            {
+              "id": "cloud-aws-cloudformation-drift",
+              "name": "AWS CloudFormation — テンプレート設計とドリフト検出",
+              "path": "topics/cloud/aws/cloudformation-drift.html",
+              "summary": "パラメータ再利用、DashboardのIaC化、失敗時保持、ドリフト検出",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 55,
+              "createdAt": "2026-10-30",
+              "updatedAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-cdk",
+              "name": "AWS CDK — Infrastructure as Code",
+              "path": "topics/cloud/aws/aws-cdk.html",
+              "summary": "Python・TypeScriptによるIaC、Construct再利用、複数環境と承認付きCDK Pipelines",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 55,
+              "createdAt": "2026-10-29"
+            },
+            {
+              "id": "cloud-aws-network-gateways",
+              "name": "AWSネットワークゲートウェイ",
+              "path": "topics/cloud/aws/network-gateways.html",
+              "summary": "IGW、NAT、Egress-only IGW、Direct ConnectからS3へのPrivateLink接続と、マルチリージョンTransit Gateway設計",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 75,
+              "createdAt": "2026-10-29",
+              "updatedAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-network-firewall",
+              "name": "AWS Network Firewall",
+              "path": "topics/cloud/aws/network-firewall.html",
+              "summary": "DPI、ステートフルルール、AZ別エンドポイント、対称ルーティングとTLS検査",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 55,
+              "createdAt": "2026-10-30"
+            },
+            {
+              "id": "cloud-aws-waf",
+              "name": "AWS WAF — XSS対策",
+              "path": "topics/cloud/aws/waf.html",
+              "summary": "XSSの緊急緩和、Web ACL、AWS Managed Rules、誤検知調整と恒久対策",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 60,
+              "createdAt": "2026-10-30"
+            },
+            {
+              "id": "cloud-aws-eks",
+              "name": "Amazon EKS",
+              "path": "topics/cloud/aws/eks.html",
+              "summary": "Kubernetesの基本、HPAとNodeスケーリング、Container Insights＋DevOps Guru",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 55,
+              "createdAt": "2026-10-29",
+              "updatedAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-ec2",
+              "name": "Amazon EC2 — AMI・EBS・バックアップ運用",
+              "path": "topics/cloud/aws/ec2.html",
+              "summary": "AMIとEBS、リージョン間AMIコピー、Spread Placement Group、バックアップ",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 45,
+              "createdAt": "2026-10-29",
+              "updatedAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-kms",
+              "name": "AWS KMS — 監査と鍵素材ローテーション",
+              "path": "topics/cloud/aws/kms.html",
+              "summary": "SSE-KMSの監査とEXTERNAL鍵素材のオンデマンドローテーション",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 45,
+              "createdAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-cost-optimization",
+              "name": "AWSコスト最適化",
+              "path": "topics/cloud/aws/cost-optimization.html",
+              "summary": "Compute Optimizer、タグ、Cost Allocation Tags、Savings Plans",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 50,
+              "createdAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-ecs",
+              "name": "Amazon ECS — 低停止・低コストのデプロイ",
+              "path": "topics/cloud/aws/ecs.html",
+              "summary": "ローリング更新とBlue/Greenを停止時間・費用・ロールバックで比較",
+              "level": "beginner-to-advanced",
+              "estimatedMinutes": 30,
+              "createdAt": "2026-10-31"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

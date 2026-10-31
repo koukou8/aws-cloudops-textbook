@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ja" data-topic-id="cloud-aws-iam">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AWS IAMの認証と認可、ユーザー・グループ・ロール、JSONポリシー、LDAPとSAMLによるフェデレーション、IAM Identity Centerを学ぶインタラクティブ教材です。">
+  <title>AWS IAMと社内認証の連携 | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"IAM"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <a href="../../../quick/index.html#iam" style="display:inline-block;margin-bottom:20px;padding:8px 14px;background:#fff;border:1px solid #dce4ec;border-radius:6px;color:#1763c2;font-size:13px;text-decoration:none">← このテーマを約2〜3分で復習する</a>
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">AWSのアクセス管理</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">AWS IAM<span class="block sm:inline">と社内認証の連携</span></h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">「誰なのか」と「何をしてよいか」を分ける。既存の社内アカウントを使い、職務ごとに必要な権限だけを渡す仕組みを学びます。</p>
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">画像の設問から学ぶ</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">正解は4番目。LDAPと連携するSAML IdPを介して、IAMロールを利用します。</p>
+          <p class="ct-copy mt-2">社内のLDAPで本人を確認し、SAML IdPが認証結果をAWSへ伝えます。グループに応じたロールを使うことで、従業員ごとにIAMユーザーを複製せず、職務別の権限を付与できます。</p>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500"><li>認証・認可、ユーザー・グループ・ロール・ポリシーを区別する。</li><li>Allow、暗黙的Deny、明示的Denyと、信頼ポリシーの役割を理解する。</li><li>LDAP・SAML・STS・IAM Identity Centerの関係を説明する。</li></ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">基礎</a><a href="#policies" class="underline underline-offset-4">ポリシーと連携</a><a href="#operations" class="underline underline-offset-4">実務</a><a href="#case" class="underline underline-offset-4">画像の設問</a></nav>
+        </div>
+        <div class="tb-card mt-4 p-5 sm:p-6">
+          <div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div>
+          <div class="tb-progress"><div data-progress-bar style="width:0%"></div></div>
+          <p class="mt-2 text-xs text-slate-500">10個の演習の正解状況を、このブラウザに保存します。</p>
+        </div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編</h2><span class="tb-badge is-basic">基礎</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 IAMは「AWSリソースへのアクセス」を管理する</h3>
+            <div class="ct-copy"><p>IAMはIdentity and Access Managementの略です。AWSのサービスやデータへ、誰がどの操作を行えるかを管理します。EC2を停止する、S3オブジェクトを読む、IAMロールを作る、といった操作を必要な範囲に限定できます。</p><p>ここで分けたいのが<strong>認証（Authentication）</strong>と<strong>認可（Authorization）</strong>です。認証は「あなたは誰か」を確かめること、認可は「その操作をしてよいか」を判断することです。社員証で入館できても、すべての部屋に入れるとは限らない、と考えると分かりやすくなります。</p></div>
+            <div class="grid sm:grid-cols-2 gap-4 mt-5"><div class="rounded-2xl bg-sky-50 p-5"><p class="text-xs font-bold text-sky-600">認証</p><h4 class="font-bold text-sky-900 mt-2">本人確認</h4><p class="ct-copy mt-2">社内IDとMFAでログインし、どの利用者のセッションかを確かめる。</p></div><div class="rounded-2xl bg-sky-50 p-5"><p class="text-xs font-bold text-sky-600">認可</p><h4 class="font-bold text-sky-900 mt-2">操作の許可</h4><p class="ct-copy mt-2">そのセッションでS3を読めるか、書けるか、削除できるかを判定する。</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html" target="_blank" rel="noopener">What is IAM?</a></p>
+            <div data-quiz data-id="iam-q-auth" data-answer="b" data-explanation="認証成功は本人確認の成功です。AWSで何をできるかは、適用されるポリシーなどによる認可で決まります。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q1. 社内アカウントでログインできました。正しい説明は？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="iam-q1" value="a"><span>自動的にすべてのAWSリソースを操作できる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q1" value="b"><span>本人確認はできたが、各操作の許可は別に判断される</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q1" value="c"><span>すべてのS3バケットの所有者になる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q1" value="d"><span>rootユーザーへ切り替わる</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 ユーザー・グループ・ロール・ポリシー</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>用語</th><th>役割</th><th>押さえる点</th></tr></thead><tbody><tr><td>rootユーザー</td><td>AWSアカウントの最初の強い権限を持つID</td><td>日常業務に使わず、厳重に保護する</td></tr><tr><td>IAMユーザー</td><td>アカウント内に作るID</td><td>必要に応じてパスワードや長期アクセスキーを持てる</td></tr><tr><td>IAMユーザーグループ</td><td>複数のIAMユーザーへ権限をまとめて付与</td><td>グループ自体でログインしない。IAMロールをメンバーにはできない</td></tr><tr><td>IAMロール</td><td>許可された利用者やサービスが引き受ける権限の単位</td><td>通常のパスワード・長期アクセスキーを持たず、一時セッションで使う</td></tr><tr><td>IAMポリシー</td><td>どの操作・リソースを許可／拒否するかのルール</td><td>JSON形式でAction、Resource、Conditionなどを指定する</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>現在、従業員のアクセスにはフェデレーションと一時的な認証情報、EC2やLambdaなどの処理にはIAMロールの利用が推奨されます。IAMユーザーは、ロールやフェデレーションを利用できない用途などで検討します。</p></div>
+            <div class="ct-note"><strong>「グループ」は3種類を区別します。</strong>LDAPのグループ、IAM Identity Centerのグループ、IAMユーザーグループは別の仕組みです。画像の構成は、LDAPグループのメンバーに対応するIAMロールをIdPで選ぶもので、LDAPグループをIAMユーザーグループへ自動変換する意味ではありません。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html" target="_blank" rel="noopener">IAM roles</a>、<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_groups.html" target="_blank" rel="noopener">IAM user groups</a></p>
+            <div data-quiz data-id="iam-q-role" data-answer="c" data-explanation="IAMロールは従業員のフェデレーション、EC2やLambda、クロスアカウントアクセスなどで利用できます。IAMユーザーグループ自体はログイン主体ではありません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q2. 一時的な権限を従業員やAWSサービスへ渡すために使うものは？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="iam-q2" value="a"><span>共有するrootパスワード</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q2" value="b"><span>IAMユーザーグループのアクセスキー</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q2" value="c"><span>IAMロール</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q2" value="d"><span>VPCのルートテーブル</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.3 ロールの「信頼」と「権限」は別の設定</h3>
+            <div class="grid sm:grid-cols-2 gap-4 mt-4"><div class="rounded-2xl bg-sky-50 p-5"><h4 class="font-bold text-sky-900">信頼ポリシー</h4><p class="ct-copy mt-2">誰がこのロールを引き受けてよいかを定義します。例：登録したSAML IdPからのフェデレーションを許可する。</p></div><div class="rounded-2xl bg-sky-50 p-5"><h4 class="font-bold text-sky-900">権限ポリシー</h4><p class="ct-copy mt-2">引き受けた後に何をしてよいかを定義します。例：開発用S3オブジェクトだけ読み書きできる。</p></div></div>
+            <div class="ct-copy mt-4"><p>ロールを引き受けると、AWS STS（Security Token Service）などの仕組みで一時的な認証情報を使うセッションが成立します。API利用時の一時認証情報には、アクセスキーID、シークレットアクセスキー、セッショントークンが含まれ、有効期限があります。</p><p>ロールがS3の操作権限を持っていても、そのロールを引き受けるための信頼関係や条件を満たさなければ使えません。逆にロールを引き受けられても、操作するリソースに対する権限がなければアクセスは拒否されます。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html" target="_blank" rel="noopener">IAMロールと一時認証情報</a>、<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_enable-console-saml.html" target="_blank" rel="noopener">SAMLロールの信頼関係</a></p>
+            <div data-quiz data-id="iam-q-trust" data-answer="a" data-explanation="信頼ポリシーはロールを引き受ける条件、権限ポリシーは引き受けた後の操作を定義します。両方の設定を確認します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q3. 「このIdPからDevRoleを利用できる」を定義するのは？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="iam-q3" value="a"><span>ロールの信頼ポリシー</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q3" value="b"><span>S3のライフサイクルルール</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q3" value="c"><span>EC2のセキュリティグループ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q3" value="d"><span>CloudTrailの保存期間</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="policies" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：権限とフェデレーション</h2><span class="tb-badge is-applied">応用</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 JSONポリシーを読む</h3>
+            <p class="ct-copy">次は「example-company-dataバケットのdev/配下にあるオブジェクトを読む」権限を付与する、IDベースポリシーの例です。</p>
+            <pre class="tb-code mt-4"><code>{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": "s3:GetObject",
+    "Resource": "arn:aws:s3:::example-company-data/dev/*"
+  }]
+}</code></pre>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>項目</th><th>意味</th><th>読み方</th></tr></thead><tbody><tr><td>Version</td><td>ポリシー言語のバージョン</td><td>2012-10-17は作成日ではない</td></tr><tr><td>Statement / Effect</td><td>ルールと、その効果</td><td>Allowは許可、Denyは拒否</td></tr><tr><td>Action</td><td>対象の操作</td><td>s3:GetObjectはオブジェクトの取得</td></tr><tr><td>Resource</td><td>対象リソース</td><td>ARNでバケットやオブジェクト等を指定</td></tr><tr><td>Condition</td><td>追加条件。必要な場合に指定</td><td>要求元、タグ、時刻など、対応する条件キーを使う</td></tr><tr><td>Principal</td><td>誰を対象とするか</td><td>信頼ポリシーやS3バケットポリシー等で使う。上のIDベース例には書かない</td></tr></tbody></table></div>
+            <div class="ct-note"><strong>S3でよくある間違い：</strong>GetObjectにはオブジェクトARN（バケット名の後に /キー名）、ListBucketにはバケットARNを指定します。上の例だけでは一覧取得の権限はありません。暗号化キー等、別の許可が必要な操作もあります。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements.html" target="_blank" rel="noopener">IAM JSON policy elements</a></p>
+            <div data-fill data-id="iam-q-action" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="ct-copy">s3:GetObjectなど「対象の操作」を指定するJSON項目は <span class="tb-fill"><input data-answer="action" aria-label="対象操作を指定するJSON項目" placeholder="???"></span> です。</p>
+              <button data-fill-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 AllowとDenyの判定を体験する</h3>
+            <div class="ct-copy"><p>基本は「許可されていない要求は拒否する」です。これを暗黙的Denyと呼びます。要求に一致するAllowがあると許可の候補になり、適用される明示的Denyがあれば拒否が優先します。</p><p>実際のAWSでは、リソースベースポリシー、アクセス許可境界、セッションポリシー、OrganizationsのSCP／RCP、KMSのキーポリシーなども関わります。単に「どこかにAllowが1つあれば必ず成功」とは判断できません。</p></div>
+            <div data-iam-demo class="iam-demo mt-5">
+              <h4 class="font-bold text-sky-900">社内グループ→ロール→操作権限のデモ</h4>
+              <p class="text-xs text-slate-500 mt-2 leading-relaxed">同一アカウントのIDベースポリシーだけを扱う学習モデルです。信頼・認証はチェック欄で簡略化し、リソースポリシー、SCP、境界、KMS等は評価しません。AWS公式シミュレーターや実アカウントへの操作ではありません。</p>
+              <div class="iam-demo-fields"><label>社内LDAPグループ<select data-iam-group><option value="developers">Developers（開発者）</option><option value="auditors">Auditors（監査担当）</option><option value="unassigned">Unassigned（割り当てなし）</option></select></label><label>操作<select data-iam-action><option value="s3:GetObject">GetObject：読む</option><option value="s3:PutObject">PutObject：書く</option><option value="s3:DeleteObject">DeleteObject：削除</option></select></label><label>対象オブジェクト<select data-iam-resource><option value="dev/sample.json">dev/sample.json</option><option value="prod/sample.json">prod/sample.json</option></select></label></div>
+              <div class="iam-demo-checks"><label><input type="checkbox" data-iam-auth checked><span>IdPで本人確認が成功</span></label><label><input type="checkbox" data-iam-trust checked><span>ロールがIdPを信頼</span></label><label><input type="checkbox" data-iam-deny-delete><span>削除の明示的Denyを追加</span></label></div>
+              <p class="text-sm mt-4 text-slate-700">利用するロール：<strong data-iam-role>DevRole</strong></p>
+              <div data-iam-result class="iam-demo-result" aria-live="polite">設定に応じて判定します。</div>
+              <ol data-iam-trace class="iam-demo-trace"></ol>
+              <details class="tb-accordion mt-4"><summary>このグループに対応するデモ用ポリシー</summary><div class="tb-accordion-body"><pre data-iam-policy class="tb-code"></pre></div></details>
+              <p class="text-xs text-slate-500 mt-3 leading-relaxed">DevRoleはdev/配下の読み書き・削除、AuditRoleはバケット内オブジェクトの読み取りを許可します。実務ではデータの必要範囲に合わせてさらに絞り込みます。</p>
+            </div>
+            <div class="ct-note"><strong>順に試してみましょう。</strong>①開発者でprod/を読む → 暗黙的Deny。②開発者でdev/を削除 → Allow。③削除Denyを追加 → 明示的Deny。④「IdPで本人確認」を外す → ロールセッションが成立せず、操作の認可へ進みません。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html" target="_blank" rel="noopener">ポリシー評価ロジック</a>、<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic_policy-eval-denyallow.html" target="_blank" rel="noopener">Allow／Denyの評価</a></p>
+            <div data-quiz data-id="iam-q-deny" data-answer="a,c" data-multiple data-explanation="認証と認可は別で、適用される明示的DenyはAllowより優先します。SCPやアクセス許可境界だけで権限を付与することはできません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q5. 正しい説明をすべて選んでください。</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="iam-q5" value="a"><span>適用される明示的DenyはAllowより優先する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="iam-q5" value="b"><span>ログインできればすべてのAPIを使える</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="iam-q5" value="c"><span>許可されていない要求は基本的に拒否される</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="iam-q5" value="d"><span>SCPでAllowしただけで、IAM権限がなくても操作できる</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.3 LDAPとSAMLで既存の社内認証を使う</h3>
+            <div class="ct-copy"><p><strong>LDAP</strong>は、ディレクトリの利用者・グループ情報へアクセスするためのプロトコルです。LDAP対応のディレクトリが、そのままAWSへSAML認証結果を渡せるとは限りません。そこで、LDAPと連携する<strong>IdP（Identity Provider：IDプロバイダー）</strong>を使います。</p><p><strong>SAML</strong>は、IdPで確認した本人情報や属性を、署名付きの認証応答でサービス側へ伝える標準です。別の認証基盤で確認したIDをAWSでも利用する連携を、フェデレーションと呼びます。</p></div>
+            <div class="iam-flow" aria-label="LDAPからAWSへのSAMLフェデレーション"><div><small>01 社内で本人確認</small><strong>LDAPディレクトリ</strong><p>利用者とグループ所属を管理する</p></div><div><small>02 認証結果を発行</small><strong>SAML IdP</strong><p>グループに応じたロール情報をSAML応答へ設定する</p></div><div><small>03 ロールの利用を許可</small><strong>AWSのSAML連携・STS</strong><p>署名・有効期限・信頼条件などを確認し、一時セッションへつなぐ</p></div><div><small>04 操作を認可</small><strong>IAMロールの権限</strong><p>許可された範囲でS3等へアクセスする</p></div></div>
+            <div class="ct-copy mt-4"><p>事前にIAMへIdPのメタデータを登録し、職務別のIAMロールを作り、そのIdPを信頼するよう設定します。IdP側ではLDAPグループに応じて、SAMLのRole属性へ許可するIAMロールARNとSAMLプロバイダーARNの組を設定します。</p><p>API利用では、SAML応答を使ってSTSの <code>AssumeRoleWithSAML</code> で一時認証情報を取得できます。コンソールSSOでは、ブラウザがAWSのサインインエンドポイントへSAML応答を送り、AWS側がセッションへつなぎます。</p></div>
+            <div class="ct-note"><strong>パスワードをAWSへコピーする必要はありません。</strong>本人確認は社内IdP側で行い、AWS側はSAML応答と信頼関係に基づいてアクセスを認めます。LDAPグループに追加しただけで権限が自動的に生えるのではなく、IdPでのロール割り当てとAWS側の設定が必要です。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_saml.html" target="_blank" rel="noopener">SAML 2.0 federation</a>、<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_saml_assertions.html" target="_blank" rel="noopener">SAMLのRole属性</a>、<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_enable-console-saml.html" target="_blank" rel="noopener">コンソールへのSSO</a></p>
+            <div class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q6. 設定済みのSAML連携で、実行時の流れを並べ替えてください。</p>
+              <ul data-sortable data-id="iam-q-federation" data-answer="authenticate,assertion,session,authorize" class="tb-sortable"><li data-id="session">AWS側で応答と信頼条件を確認し、ロールセッションを成立させる</li><li data-id="authenticate">IdPがLDAP等を使って本人を確認する</li><li data-id="authorize">AWSリソースへの要求を、ロールの権限などで判定する</li><li data-id="assertion">IdPがグループに応じたロール情報を含むSAML応答を作る</li></ul>
+              <p data-sortable-feedback class="text-sm text-slate-500 mt-3">ドラッグまたは矢印ボタンで変更すると判定します。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="operations" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編</h2><span class="tb-badge is-prac">実務</span></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 IAM Identity Centerではどう構成する？</h3>
+            <div class="ct-copy"><p>従業員が複数のAWSアカウントやアプリを使う場合、IAM Identity Centerでアクセスを集中管理する構成が推奨されます。IDソースには、Identity Center自身のディレクトリ、対応するMicrosoft Active Directory、外部IdPを選べます。</p><p>画像のように既存LDAPを使いたいなら、LDAPと連携する外部IdPを経由してIdentity CenterへSAML連携する構成が候補になります。ユーザー・グループ情報をIdentity Centerへ登録し、AWSアカウントへの割り当てを管理します。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>仕組み</th><th>役割</th><th>混同しない点</th></tr></thead><tbody><tr><td>SAML 2.0</td><td>外部IdPでの認証結果を使ってSSOする</td><td>ユーザー一覧・所属グループを問い合わせて同期する仕組みではない</td></tr><tr><td>SCIM</td><td>ユーザー・グループ情報をプロビジョニングする</td><td>ログイン時の認証プロトコルとは異なる。対応IdPで利用する</td></tr><tr><td>アクセス許可セット</td><td>AWSアカウントで使う権限のテンプレート</td><td>割り当てに応じ、Identity Centerが対象アカウントのIAMロールを管理する</td></tr><tr><td>グループへの割り当て</td><td>どのAWSアカウントで、どの権限を使えるかを決める</td><td>社内LDAPグループとIAMユーザーグループは別物</td></tr></tbody></table></div>
+            <div class="ct-note"><strong>選択肢1が不適切な理由：</strong>任意のオンプレミスLDAPを、そのままIdentity Centerの同期先として指定できるわけではありません。対応するActive Directory連携と、一般的なLDAPディレクトリは区別します。Identity Center自体が不適切なのではなく、選択肢の直接連携の説明が不十分です。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/singlesignon/latest/userguide/manage-your-identity-source.html" target="_blank" rel="noopener">Identity CenterのIDソース</a>、<a href="https://docs.aws.amazon.com/singlesignon/latest/userguide/manage-your-identity-source-idp.html" target="_blank" rel="noopener">外部IdPとプロビジョニング</a>、<a href="https://docs.aws.amazon.com/singlesignon/latest/userguide/permissionsetsconcept.html" target="_blank" rel="noopener">アクセス許可セット</a></p>
+            <div data-quiz data-id="iam-q-scim" data-answer="b" data-explanation="SAMLは認証の連携、SCIMはユーザー・グループ情報の登録・更新です。外部IdPを使う場合、Identity Centerへ対象ユーザーやグループをプロビジョニングする必要があります。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q7. SAMLとSCIMの説明として正しいものは？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="iam-q7" value="a"><span>どちらもネットワーク専用線の規格</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q7" value="b"><span>SAMLは認証連携、SCIMはユーザー・グループ情報の登録・更新</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q7" value="c"><span>SAMLだけでLDAPの全グループが自動同期される</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q7" value="d"><span>SCIMを使うと全員がAdministratorAccessになる</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 最小権限と、入社・異動・退職の運用</h3>
+            <div class="ct-copy"><p>職務に必要な操作・リソース・条件へ絞る考え方を、最小権限と呼びます。たとえば「監査担当は必要なログの参照のみ」「開発者は開発環境へ変更可能」「本番変更は別ロール」という形で責任を分けます。</p><p>人のアクセスにはフェデレーションとMFA、アプリにはロールを使い、長期アクセスキーを配布する範囲を減らします。EC2へキーを書き込む代わりにインスタンスプロファイル、Lambdaには実行ロールなどを使います。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>場面</th><th>行うこと</th><th>確認すること</th></tr></thead><tbody><tr><td>入社</td><td>社内IDと職務グループ、必要なアカウントへの割り当てを用意</td><td>不要な管理権限が付いていないか</td></tr><tr><td>異動</td><td>旧グループ・割り当てを外し、新しい職務へ変更</td><td>権限が追加される一方になっていないか</td></tr><tr><td>退職・緊急停止</td><td>IdP側の利用停止と割り当て解除、必要に応じたセッション対処</td><td>すでに発行したセッションが残っていないか</td></tr><tr><td>定期棚卸し</td><td>未使用ロール、アクセスキー、過剰な許可を見直す</td><td>Access Analyzerや利用履歴で必要性を判断する</td></tr></tbody></table></div>
+            <div class="ct-note"><strong>グループから外した瞬間に、すべての既存セッションが消えるとは限りません。</strong>新しいセッションの発行停止と、発行済みセッションの権限・有効期限を分けて考えます。緊急時は利用方式に対応した失効手順を確認します。直接SAMLで使うIAMロールと、Identity Centerの許可セット由来のセッションでは、管理手順も異なります。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html" target="_blank" rel="noopener">IAMの推奨事項</a>、<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_revoke-sessions.html" target="_blank" rel="noopener">ロールの一時セッションへの対処</a></p>
+            <div data-quiz data-id="iam-q-lifecycle" data-answer="a,c" data-multiple data-explanation="一時認証情報と最小権限を使い、異動・退職で不要なアクセスを外します。発行済みセッションへの対処も別途確認します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q8. 適切な運用をすべて選んでください。</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="iam-q8" value="a"><span>職務に必要な範囲のロールを割り当てる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="iam-q8" value="b"><span>全従業員でrootの認証情報を共有する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="iam-q8" value="c"><span>退職時は新規ログイン停止と既存セッションを確認する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="iam-q8" value="d"><span>異動のたびに新しい権限だけを追加し続ける</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.3 AccessDeniedを順に切り分ける</h3>
+            <div class="ct-copy"><p>最初に「今どのID・ロールで操作しているか」を確かめます。意図したグループに属していても、違うAWSアカウントやロールのセッションを使っていることがあります。</p></div>
+            <pre class="tb-code mt-4"><code># 現在のCLI認証情報で使っている主体を確認（参照操作）
+aws sts get-caller-identity
+
+# Identity Centerの設定済みプロファイルを使う場合
+aws sso login --profile company-dev
+aws sts get-caller-identity --profile company-dev</code></pre>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>止まっている場所</th><th>確認すること</th></tr></thead><tbody><tr><td>IdPでログインできない</td><td>社内ID、MFA、アカウント状態、IdPへの到達性</td></tr><tr><td>SAML連携が失敗する</td><td>署名証明書、有効期限、受信先、IdPメタデータ、Role属性と信頼ポリシー</td></tr><tr><td>ロールを選べない</td><td>LDAPグループのマッピング、IdPの割り当て、Identity Centerへの同期と割り当て</td></tr><tr><td>ロール利用後にAccessDenied</td><td>Action、Resource、Condition、明示的Deny、境界・SCP等、リソース側の許可</td></tr><tr><td>一部のS3処理だけ失敗する</td><td>ListBucketとGetObjectの違い、オブジェクトARN、KMS権限など</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>CloudTrailではAssumedRoleなどの実行主体と、操作名・対象・エラーを調べます。IAMポリシーの構文・権限検証にはAccess Analyzerや公式のポリシーシミュレーターも使えます。ただしシミュレーターが扱える範囲には制限があるため、対象環境の条件を合わせて判断します。</p></div>
+            <div class="ct-note"><strong>Direct Connectの役割：</strong>オンプレミスとAWSをつなぐネットワーク経路です。通信できることとAWSの操作権限は別です。Direct Connectを接続しただけでは、IAMロールがLDAPパスワードを検証するようにはなりません。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html" target="_blank" rel="noopener">ポリシー評価</a>、<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_testing-policies.html" target="_blank" rel="noopener">IAMポリシーシミュレーター</a></p>
+            <div data-quiz data-id="iam-q-network" data-answer="d" data-explanation="ネットワーク接続と認証・認可は別の役割です。AWSリソースの操作には、利用主体と対応する権限が必要です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+              <p class="font-semibold mb-3">Q9. Direct Connectを用意すればLDAPのAWS認証が自動完成する？</p>
+              <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="iam-q9" value="a"><span>はい。専用線を通る要求はすべて許可される</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q9" value="b"><span>はい。すべてのLDAPグループがIAMグループになる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q9" value="c"><span>はい。ロールの信頼ポリシーは不要になる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q9" value="d"><span>いいえ。接続に加え、IdP連携とIAMの権限設計が必要</span></label></li></ul>
+              <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：画像の設問を解く</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <h3 class="text-lg font-bold text-sky-900 mb-3">既存LDAPとグループ所属を使い、職務別にアクセスを許可する</h3>
+          <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>選択肢</th><th>判断</th><th>理由</th></tr></thead><tbody><tr><td>1. Identity CenterへLDAPをそのまま同期</td><td>説明が不適切</td><td>任意のLDAPを直接指定できるわけではない。対応AD連携や外部IdP経由の構成を区別する必要がある</td></tr><tr><td>2. LambdaでIAMユーザーを複製</td><td>最適ではない</td><td>IAMユーザーを作るだけではLDAPでの認証連携にならず、認証情報や削除・同期の運用も増える</td></tr><tr><td>3. CloudFormation＋Direct Connect</td><td>要件を満たさない</td><td>ロールの構築とネットワーク接続だけでは、LDAPからAWSへの認証連携を実現できない</td></tr><tr><td>4. LDAPと連携するSAML IdP＋IAMロール</td><td>正解</td><td>既存の本人確認を利用し、グループに応じたロールとポリシーで最小権限を実現できる</td></tr></tbody></table></div>
+          <div class="ct-note"><strong>要件と仕組みの対応：</strong>既存認証情報の再利用はIdP／フェデレーション、職務別アクセスはグループのマッピングとIAMロールの権限で実現します。新規の全社的なアクセス管理では、そのIdPとIAM Identity Centerを組み合わせる構成も検討します。</div>
+          <div data-quiz data-id="iam-q-final" data-answer="d" data-explanation="LDAPでの本人確認をSAML IdPが連携し、職務グループに応じたIAMロールを割り当てます。AWSには認証結果と必要な属性を渡し、従業員ごとのIAMユーザー複製を避けられます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5">
+            <p class="font-semibold mb-3">Q10. 画像の要件を最も直接的に満たすものは？</p>
+            <ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="iam-q10" value="a"><span>LDAPの全ユーザーをrootとして登録する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q10" value="b"><span>IAMユーザーを自動生成するだけにする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q10" value="c"><span>Direct Connectの接続だけを構成する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="iam-q10" value="d"><span>LDAP連携のSAML IdPを使い、グループに応じたIAMロールでアクセスする</span></label></li></ul>
+            <button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="identity-center-saml" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">6</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">追加演習：IAM Identity Centerと外部SAML IdP</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <p class="ct-copy">接続ではメタデータを相互交換します。IAM Identity Centerが生成するSPメタデータ（Entity ID、ACS URL等）を外部IdPへ登録し、外部IdPのSAMLメタデータ（SSO URL、署名検証用X.509証明書等）をIdentity Centerへ取り込みます。固定IP一覧、全メンバーアカウントの管理者権限、管理アカウントのルート資格情報は前提ではありません。</p>
+          <div class="ct-note mt-4"><strong>別の論点：</strong>認証の信頼確立と、ユーザー／グループのプロビジョニングは別です。外部IdPがSCIMをサポートする場合は、自動プロビジョニングも合わせて設計します。</div>
+          <div data-quiz data-multiple data-id="iam-q11" data-answer="a,d" data-explanation="SP側とIdP側のSAMLメタデータを相互交換して信頼を構成します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q11. 外部SAML IdP接続の準備物を2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="iam-q11" value="a"><span>Identity Center側のSAMLメタデータ</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="iam-q11" value="b"><span>IdPの固定パブリックIP一覧</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="iam-q11" value="c"><span>全メンバーアカウントのルート資格情報</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="iam-q11" value="d"><span>X.509証明書を含むIdPメタデータ</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">5</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">次のステップ</h2></div>
+        <div class="grid sm:grid-cols-2 gap-5"><div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">公式資料で深める</h3><ul class="mt-4 text-sm text-sky-700 space-y-3"><li><a class="underline" href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_saml.html" target="_blank" rel="noopener">SAMLフェデレーション</a></li><li><a class="underline" href="https://docs.aws.amazon.com/singlesignon/latest/userguide/manage-your-identity-source-idp.html" target="_blank" rel="noopener">Identity Centerと外部IdP</a></li><li><a class="underline" href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html" target="_blank" rel="noopener">IAMポリシーの評価ロジック</a></li></ul></div><div class="tb-card p-5 sm:p-7"><h3 class="font-bold text-sky-900">関連する教材</h3><ul class="mt-4 text-sm text-sky-700 space-y-3"><li><a class="underline" href="cloudtrail.html">CloudTrail：操作主体の監査</a></li><li><a class="underline" href="systems-manager.html">Systems Manager：ロールを使った運用管理</a></li><li><a class="underline" href="service-quotas.html">Service Quotas：リソースの上限</a></li></ul></div></div>
+        <p class="text-xs text-slate-500 leading-relaxed mt-5">2026年10月29日にAWS公式資料を確認。権限デモはブラウザ内の限定した学習モデルで、実際のAWSやLDAPへ接続しません。実環境ではポリシーの種類とサービス固有の評価条件を確認してください。</p>
+      </section>
+    </article>
+  </main>
+  <script src="../../../assets/shared.js?v=20261029-6"></script>
+</body>
+</html>

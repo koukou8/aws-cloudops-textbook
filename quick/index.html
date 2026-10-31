@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="AWSの7教材を、1テーマ2〜3分で見返せるコンパクトな復習ノート。詳しい教材もそのまま読めます。">
+  <title>AWS さっと復習 — 7つのコンパクト教材</title>
+  <link rel="stylesheet" href="quick.css">
+  <script src="quick.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#content">本文へ</a>
+  <header class="masthead">
+    <a class="brand" href="#vpc-flow-logs"><span class="brand-mark" aria-hidden="true">A</span>AWS <span>さっと復習</span></a>
+    <span class="edition">7テーマ · 1テーマ 約2〜3分</span>
+  </header>
+  <div class="layout">
+    <aside>
+      <p class="nav-label">読みたいテーマを選ぶ</p>
+      <nav id="topics" aria-label="AWS教材" tabindex="-1">
+        <a href="#vpc-flow-logs"><span>01</span>VPCフローログ</a>
+        <a href="#elasticache"><span>02</span>ElastiCache</a>
+        <a href="#service-quotas"><span>03</span>リソース上限</a>
+        <a href="#systems-manager"><span>04</span>Systems Manager</a>
+        <a href="#cloudtrail"><span>05</span>CloudTrail</a>
+        <a href="#iam"><span>06</span>IAM</a>
+        <a href="#lambda"><span>07</span>Lambda</a>
+      </nav>
+      <p class="side-note">要点だけ先に。<br>必要になったら詳細版へ。</p>
+    </aside>
+    <main id="content" tabindex="-1">
+      <p class="reading-label">COMPACT NOTES <span>／ 要点・比較・判断をひとまとめ</span></p>
+
+      <article id="vpc-flow-logs" aria-labelledby="vpc-title">
+        <div class="topic-head"><p class="number">01 / NETWORK</p><a class="full-link" href="../topics/cloud/aws/vpc-flow-logs.html">詳しい教材 ↗</a></div>
+        <h1 id="vpc-title">VPCフローログ</h1>
+        <p class="definition">VPCのネットワーク通信を、<strong>「どこから・どこへ・許可／拒否」</strong>で記録するログ。</p>
+        <section><h2>まず、この3つ</h2><ul class="essentials">
+          <li>送信元・宛先IP、ポート、プロトコル、通信量などを記録する。<strong>通信の中身は記録しない。</strong></li>
+          <li>VPC・サブネット・ENI単位で設定できる。CloudWatch LogsやS3などへ配信する。</li>
+          <li><code>ACCEPT</code>は通信が許可された記録。<strong>アプリの処理成功を保証しない。</strong></li>
+        </ul></section>
+        <section><h2>ログの使い分け</h2><table><thead><tr><th scope="col">知りたいこと</th><th scope="col">主に使うもの</th></tr></thead><tbody>
+          <tr><th scope="row">IP通信が許可・拒否されたか</th><td>VPCフローログ</td></tr>
+          <tr><th scope="row">誰がAWSの設定を変更したか</th><td>CloudTrail</td></tr>
+          <tr><th scope="row">CPUやアプリの状態はどうか</th><td>CloudWatchのメトリクス・ログ</td></tr>
+        </tbody></table></section>
+        <div class="takeaway"><p class="eyebrow">判断のポイント</p><p><strong>REJECTなら、まずSG・NACLを確認。</strong>ACCEPTでも接続できなければ、OS・待受ポート・アプリなども調べる。TCPはプロトコル番号6、UDPは17。</p></div>
+        <details><summary>確認：フローログからHTTPリクエストの本文を読める？</summary><p>読めません。IP通信のメタデータを調べるログであり、ペイロードの記録ではありません。</p></details>
+        <footer class="sources">参照：<a href="https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html" target="_blank" rel="noopener">AWS公式 · VPCフローログ</a></footer>
+      </article>
+
+      <article id="elasticache" aria-labelledby="cache-title">
+        <div class="topic-head"><p class="number">02 / DATABASE</p><a class="full-link" href="../topics/cloud/aws/elasticache.html">詳しい教材 ↗</a></div>
+        <h1 id="cache-title">Amazon ElastiCache</h1>
+        <p class="definition">よく使うデータをメモリに置き、<strong>応答を速くし、DBの負荷を減らす</strong>サービス。</p>
+        <section><h2>まず、この3つ</h2><ul class="essentials">
+          <li>キャッシュにあれば<strong>HIT</strong>。なければ<strong>MISS</strong>としてDBから取得し、キャッシュへ保存する（Cache-Aside）。</li>
+          <li>アプリ側で読み書きを組み込む。<strong>DBの前に置くだけで自動的に高速化するわけではない。</strong></li>
+          <li>Valkey・Redis OSS・Memcachedなどのエンジンがある。使うデータ構造や可用性の要件で選ぶ。</li>
+        </ul></section>
+        <section><h2>混同しやすい3つ</h2><table><thead><tr><th scope="col">仕組み</th><th scope="col">役割</th></tr></thead><tbody>
+          <tr><th scope="row">TTL</th><td>データの有効期限。鮮度とヒット率に影響する</td></tr>
+          <tr><th scope="row">シャード</th><td>データを分割し、容量や処理を分散する</td></tr>
+          <tr><th scope="row">レプリカ</th><td>コピーを保持し、読み取り分散や可用性に使う</td></tr>
+        </tbody></table></section>
+        <div class="takeaway"><p class="eyebrow">判断のポイント</p><p><strong>キャッシュが消えても困らない設計に。</strong>DBなどから再取得できるようにし、期限切れが集中してDBへ負荷が戻ることにも備える。</p></div>
+        <details><summary>確認：TTLを長くすれば、いつでも正しい最新データになる？</summary><p>いいえ。ヒット率は上がる可能性がありますが、古い値が残りやすくなります。更新時の削除・再設定も設計します。</p></details>
+        <footer class="sources">参照：<a href="https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/WhatIs.html" target="_blank" rel="noopener">AWS公式 · ElastiCache</a></footer>
+      </article>
+
+      <article id="service-quotas" aria-labelledby="quota-title">
+        <div class="topic-head"><p class="number">03 / GOVERNANCE</p><a class="full-link" href="../topics/cloud/aws/service-quotas.html">詳しい教材 ↗</a></div>
+        <h1 id="quota-title">AWSのリソース上限</h1>
+        <p class="definition">作れる数・使える量の上限を<strong>「サービスクォータ」</strong>という。上限の適用単位が重要。</p>
+        <section><h2>まず、この3つ</h2><ul class="essentials">
+          <li>多くは<strong>アカウント×リージョン</strong>単位。ただしVPC単位・AZ単位など、リソースによって異なる。</li>
+          <li>引き上げを申請できる上限と、変更できない上限がある。<strong>申請しても即時反映とは限らない。</strong></li>
+          <li>CloudFormationも各サービスの上限に従う。失敗時は<strong>スタックのイベントと対象サービスの使用量</strong>を見る。</li>
+        </ul></section>
+        <section><h2>VPC関連の代表例</h2><table><thead><tr><th scope="col">リソース</th><th scope="col">デフォルト値と単位</th></tr></thead><tbody>
+          <tr><th scope="row">VPC</th><td>5 ／ アカウント・リージョン</td></tr>
+          <tr><th scope="row">サブネット</th><td>200 ／ VPC</td></tr>
+          <tr><th scope="row">NATゲートウェイ</th><td>5 ／ AZ</td></tr>
+          <tr><th scope="row">Elastic IP（EC2-VPC）</th><td>5 ／ アカウント・リージョン</td></tr>
+        </tbody></table><p class="caption">代表的なデフォルト値。実際の適用値はService Quotas等で確認する。</p></section>
+        <div class="takeaway"><p class="eyebrow">画像の設問なら</p><p><strong>同じアカウント・同じリージョンでVPCを増やし続けて失敗 → VPC数の上限を疑う。</strong>テンプレートが同じでも、既存リソースの使用量は増えている。</p></div>
+        <details><summary>確認：東京リージョンのVPC数が上限なら、大阪でも作れない？</summary><p>いいえ。VPC数のクォータはリージョンごとです。ただし大阪側でも、そのアカウントに適用された上限と使用量の確認は必要です。</p></details>
+        <footer class="sources">参照：<a href="https://docs.aws.amazon.com/vpc/latest/userguide/amazon-vpc-limits.html" target="_blank" rel="noopener">AWS公式 · Amazon VPCのクォータ</a></footer>
+      </article>
+
+      <article id="systems-manager" aria-labelledby="ssm-title">
+        <div class="topic-head"><p class="number">04 / OPERATIONS</p><a class="full-link" href="../topics/cloud/aws/systems-manager.html">詳しい教材 ↗</a></div>
+        <h1 id="ssm-title">AWS Systems Manager</h1>
+        <p class="definition">多数のサーバーに対する<strong>操作・パッチ適用・状態確認をまとめて行う</strong>運用サービス。</p>
+        <section><h2>まず、この3つ</h2><ul class="essentials">
+          <li>管理対象にするには、SSM Agent・必要なIAM権限・サービスへのネットワーク接続などを整える。</li>
+          <li><strong>タグで対象を選ぶ。</strong>パッチベースラインは「どのパッチを承認するか」のルール。対象の選択とは別。</li>
+          <li><strong>Scanは調査、Installは適用。</strong>適用後はパッチのコンプライアンス状況を確認する。再起動も考慮する。</li>
+        </ul></section>
+        <section><h2>どの機能を使う？</h2><table><thead><tr><th scope="col">機能</th><th scope="col">担当すること</th></tr></thead><tbody>
+          <tr><th scope="row">Run Command</th><td>コマンドやスクリプトを複数台へ実行</td></tr>
+          <tr><th scope="row">Patch Manager</th><td>パッチのスキャン・適用・適用状況の確認</td></tr>
+          <tr><th scope="row">Maintenance Windows</th><td>定期的な作業時間帯とタスクの設定</td></tr>
+          <tr><th scope="row">Session Manager</th><td>SSHの受信ポートを開けずに対話的に接続</td></tr>
+        </tbody></table></section>
+        <div class="takeaway"><p class="eyebrow">画像の設問なら</p><p><strong>80台へ今すぐ適用＋以後も自動化＋レポート → Patch Manager。</strong>ベースラインを定め、タグで対象を選び、今後の適用はメンテナンスウィンドウなどで定期化する。</p></div>
+        <details><summary>確認：Run Commandがパッチベースラインを作る機能？</summary><p>いいえ。ベースラインを管理するのはPatch Managerです。Run Commandはパッチ用ドキュメントの実行にも使われますが、役割を区別します。</p></details>
+        <footer class="sources">参照：<a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/patch-manager.html" target="_blank" rel="noopener">AWS公式 · Patch Manager</a></footer>
+      </article>
+
+      <article id="cloudtrail" aria-labelledby="trail-title">
+        <div class="topic-head"><p class="number">05 / AUDIT</p><a class="full-link" href="../topics/cloud/aws/cloudtrail.html">詳しい教材 ↗</a></div>
+        <h1 id="trail-title">AWS CloudTrail</h1>
+        <p class="definition">AWSで<strong>「誰が・いつ・何を操作したか」</strong>を追跡する、監査のための記録。</p>
+        <section><h2>まず、この3つ</h2><ul class="essentials">
+          <li>イベント履歴では、過去<strong>90日間の管理イベント</strong>をリージョンごとに確認できる。</li>
+          <li>継続保存には証跡などを設定する。S3オブジェクト操作などの<strong>データイベントは、別途記録対象に設定</strong>する。</li>
+          <li>ログファイルの整合性検証を有効にすると、<strong>署名付きダイジェスト</strong>を生成。ログの改変や削除の検出に使う。</li>
+        </ul></section>
+        <section><h2>守る目的が違う</h2><table><thead><tr><th scope="col">仕組み</th><th scope="col">主な目的</th></tr></thead><tbody>
+          <tr><th scope="row">ログファイルの整合性検証</th><td>保存後の変更などを検出する</td></tr>
+          <tr><th scope="row">S3 Object Lock</th><td>保持期間中の上書き・削除を制限する</td></tr>
+          <tr><th scope="row">暗号化（KMSなど）</th><td>データを不正に読まれにくくする</td></tr>
+        </tbody></table></section>
+        <div class="takeaway"><p class="eyebrow">画像の設問なら</p><p><strong>ログの真正性を検証したい → CloudTrailの整合性検証。</strong>自作Lambdaでハッシュを保存する必要はない。ただし、有効化だけで自動監視が完了するわけではなく、CLI等で検証を実行する。</p></div>
+        <details><summary>確認：整合性検証を有効にすると、ログを書き換えられなくなる？</summary><p>いいえ。これは改変の「検出」のための仕組みです。削除・上書きの防止には、権限制御やS3 Object Lockなどを組み合わせます。</p></details>
+        <footer class="sources">参照：<a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-log-file-validation-intro.html" target="_blank" rel="noopener">AWS公式 · ログファイルの整合性検証</a></footer>
+      </article>
+
+      <article id="iam" aria-labelledby="iam-title">
+        <div class="topic-head"><p class="number">06 / IDENTITY</p><a class="full-link" href="../topics/cloud/aws/iam.html">詳しい教材 ↗</a></div>
+        <h1 id="iam-title">AWS IAM</h1>
+        <p class="definition">AWSで<strong>「誰が・どのリソースに・何をしてよいか」</strong>を制御する仕組み。</p>
+        <section><h2>まず、この3つ</h2><ul class="essentials">
+          <li><strong>認証＝誰かの確認、認可＝何を許可するか。</strong>ログインできても、すべての操作ができるわけではない。</li>
+          <li>必要な操作・対象だけを許可する<strong>最小権限</strong>が基本。ポリシーの明示的なDenyはAllowより優先する。</li>
+          <li>ロールは引き受けて利用し、<strong>一時的な認証情報</strong>で操作する。従業員ごとのIAMユーザー作成は必須ではない。</li>
+        </ul></section>
+        <section><h2>混同しやすい役割</h2><table><thead><tr><th scope="col">仕組み</th><th scope="col">答える問い</th></tr></thead><tbody>
+          <tr><th scope="row">信頼ポリシー</th><td>誰がこのロールを引き受けられる？</td></tr>
+          <tr><th scope="row">許可ポリシー</th><td>引き受けたロールで何ができる？</td></tr>
+          <tr><th scope="row">SAML / SCIM</th><td>SAMLは認証連携、SCIMはユーザー・グループの同期</td></tr>
+        </tbody></table></section>
+        <div class="takeaway"><p class="eyebrow">画像の設問なら</p><p><strong>LDAP → SAML IdP → STS → IAMロール。</strong>LDAPで認証するIdPを用意し、グループに応じてロールへ割り当てる。汎用LDAPをそのままIAM Identity Centerへ直接同期する案ではない。</p></div>
+        <details><summary>確認：Direct ConnectでLDAPサーバーにつなげば、IAMとの認証連携も完成？</summary><p>いいえ。Direct Connectはネットワーク接続です。認証情報をAWSへ連携するIdPや、ロールの信頼・許可設定が別途必要です。</p></details>
+        <footer class="sources">参照：<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_saml.html" target="_blank" rel="noopener">AWS公式 · SAMLフェデレーション</a></footer>
+      </article>
+
+      <article id="lambda" aria-labelledby="lambda-title">
+        <div class="topic-head"><p class="number">07 / COMPUTE</p><a class="full-link" href="../topics/cloud/aws/lambda.html">詳しい教材 ↗</a></div>
+        <h1 id="lambda-title">AWS Lambda</h1>
+        <p class="definition">イベントをきっかけにコードを動かす。<strong>サーバー基盤の管理はAWSに任せる</strong>サービス。</p>
+        <section><h2>まず、この3つ</h2><ul class="essentials">
+          <li>S3への保存やAPI要求などで起動する。利用者はコード・IAM権限・タイムアウトなどを設計する。</li>
+          <li><strong>同時実行数＝その瞬間に処理中の要求数。</strong>毎秒リクエスト数（RPS）とは異なる。</li>
+          <li>平均同時実行数の目安は<strong>毎秒の到着数 × 平均処理時間（秒）</strong>。200件/秒 × 2秒なら約400。</li>
+        </ul></section>
+        <section><h2>400枠を「予約」するのはどれ？</h2><table><thead><tr><th scope="col">設定</th><th scope="col">役割</th></tr></thead><tbody>
+          <tr><th scope="row">予約済み同時実行数</th><td>関数専用の枠を確保し、同時に上限も設定</td></tr>
+          <tr><th scope="row">プロビジョンド同時実行数</th><td>実行環境を事前初期化し、開始時の遅延を減らす</td></tr>
+          <tr><th scope="row">メモリ / DLQ</th><td>メモリは処理性能、DLQは失敗イベントの回収</td></tr>
+        </tbody></table></section>
+        <div class="takeaway"><p class="eyebrow">画像の設問なら</p><p><strong>他アプリに枠を奪われず400の容量を確保 → 予約済み同時実行数を400。</strong>この関数の上限も400になる。400個の環境を常時起動する設定ではなく、急増時の即時処理まで保証するものでもない。</p></div>
+        <details><summary>確認：予約済み同時実行数を400にした関数は、暇なら500まで増えられる？</summary><p>増えられません。400は専用に確保する枠であると同時に、その関数の上限です。余剰の共有枠を借りて500にすることはできません。</p></details>
+        <footer class="sources">参照：<a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-concurrency.html" target="_blank" rel="noopener">AWS公式 · 同時実行数の設定</a></footer>
+      </article>
+      <p class="page-note"><a href="#topics">テーマを選び直す ↑</a><span>説明・図解・演習は「詳しい教材」へ。</span></p>
+    </main>
+  </div>
+</body>
+</html>

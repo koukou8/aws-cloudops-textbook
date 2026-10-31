@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ja" data-topic-id="cloud-aws-eks">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Amazon EKSとKubernetesの基本、コントロールプレーン、ノード、Podネットワーク、Pod Identity、スケーリング、アップグレード、監視を学ぶ通常版教材。">
+  <title>Amazon EKS | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css?v=20261029-13">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"Amazon EKS"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">通常版 · 約55分</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">Amazon EKS</h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">Kubernetesの「望ましい状態」をAWS上で安全に運用する。EKSが管理する範囲、Podを動かす計算資源、VPCネットワーク、AWS権限、スケーリング、更新の順序をつなげて理解します。</p>
+
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">添付のS3設問との関係</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">権限と通信経路は、両方そろって初めてアクセスできます。</p>
+          <p class="ct-copy mt-2">プライベートサブネットから同一リージョンのS3へ接続する最小構成は、S3用Gateway VPC EndpointをVPCに作成し、対象サブネットのルート表へ関連付ける方法です。EKSでも同じで、ノードやPodが使うサブネットのルート表に経路が必要です。さらにアプリのAWS権限は、ノードロールへまとめて付与せず、EKS Pod IdentityまたはIRSAでKubernetes ServiceAccount単位に与えます。</p>
+          <div class="ct-flow" aria-label="EKS PodからS3への経路"><div><small>WORKLOAD</small><strong>Pod + ServiceAccount</strong><p>Pod IdentityでS3読み取り権限</p></div><div><small>NETWORK</small><strong>Gateway Endpoint</strong><p>サブネットのルート表で選択</p></div><div><small>DESTINATION</small><strong>Amazon S3</strong><p>バケット／Endpoint Policyでも限定</p></div></div>
+          <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/vpc/latest/privatelink/gateway-endpoints.html" target="_blank" rel="noopener">Gateway VPC Endpoint</a>、<a href="https://docs.aws.amazon.com/eks/latest/userguide/service-accounts.html" target="_blank" rel="noopener">EKSワークロードへのIAM権限</a></p>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500"><li>EKSとKubernetesの役割分担、主要オブジェクトを説明する。</li><li>Managed Node Group、Fargate、EKS Auto Modeを要件で選ぶ。</li><li>ネットワーク、Pod権限、スケーリング、更新・監視を実務設計へ落とし込む。</li></ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">基本構造</a><a href="#compute" class="underline underline-offset-4">計算資源</a><a href="#network" class="underline underline-offset-4">ネットワーク</a><a href="#operations" class="underline underline-offset-4">運用</a><a href="#case" class="underline underline-offset-4">構成演習</a></nav>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-6"><div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div><div class="tb-progress"><div data-progress-bar style="width:0%"></div></div><p class="mt-2 text-xs text-slate-500">10問の正解状況を、このブラウザに保存します。</p></div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編：EKSとKubernetesの役割を分ける</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 EKSはマネージドKubernetes</h3>
+            <div class="ct-copy"><p>Amazon Elastic Kubernetes Service（Amazon EKS）は、KubernetesクラスタをAWS上で運用するマネージドサービスです。EKS StandardではAWSがKubernetesのコントロールプレーンを運用し、利用者はアプリケーションとデータプレーンを設計します。</p><p>コントロールプレーンにはAPI Server、etcd、Scheduler、Controller Managerなどがあります。データプレーンではNode上のkubeletとコンテナランタイムがPodを実行します。EKS Auto ModeではAWSの管理範囲がNode、ネットワーク、ロードバランシング、ブロックストレージなどへ広がります。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">層</th><th scope="col">主な要素</th><th scope="col">EKS Standardの担当</th></tr></thead><tbody><tr><th scope="row">コントロールプレーン</th><td>API Server、etcd、Scheduler</td><td>AWSが管理</td></tr><tr><th scope="row">データプレーン</th><td>Node、kubelet、Pod</td><td>方式を選び、利用者も運用</td></tr><tr><th scope="row">アプリケーション</th><td>Deployment、Service、設定、データ</td><td>利用者が管理</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html" target="_blank" rel="noopener">Amazon EKSとは</a></p>
+            <div data-quiz data-id="eks-q1" data-answer="b" data-explanation="EKS StandardではAWSがKubernetesコントロールプレーンを管理します。アプリ、Node方式、権限、更新計画などは利用者の設計が必要です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q1. EKS StandardでAWSが管理する中心的な範囲は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="eks-q1" value="a"><span>アプリケーションのソースコード</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q1" value="b"><span>Kubernetesコントロールプレーン</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q1" value="c"><span>すべてのコンテナイメージ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q1" value="d"><span>業務データのバックアップ設計</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 Pod、Deployment、Service</h3>
+            <div class="ct-copy"><p>Podは1つ以上のコンテナをまとめるKubernetesの最小デプロイ単位です。通常はPodを直接作らず、Deploymentにレプリカ数、コンテナイメージ、更新方法などの望ましい状態を宣言します。</p><p>Podは再作成されるとIPが変わり得ます。Serviceはラベルで複数Podを選択し、安定した名前と仮想IPを提供します。HTTPの外部公開にはIngress、TCP/UDPの公開には <code>type: LoadBalancer</code> のServiceを組み合わせます。</p></div>
+            <div class="ct-flow" aria-label="Kubernetesリソースの関係"><div><small>DECLARATION</small><strong>Deployment</strong><p>レプリカ数と更新戦略を宣言</p></div><div><small>RUNTIME</small><strong>Pods</strong><p>コンテナを実行、必要なら再作成</p></div><div><small>ACCESS</small><strong>Service / Ingress</strong><p>安定した到達先と外部経路</p></div></div>
+            <div data-quiz data-id="eks-q2" data-answer="c" data-explanation="DeploymentがPodの望ましいレプリカ数やローリング更新を管理します。Serviceは安定したアクセス先を提供します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q2. WebアプリのPodを3個維持し、段階的に新イメージへ更新したい。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="eks-q2" value="a"><span>Namespaceだけを作る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q2" value="b"><span>Podを手作業で3回作る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q2" value="c"><span>Deploymentを作る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q2" value="d"><span>VPC Endpointを作る</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="compute" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：Podをどこで動かすか</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 計算資源の選択肢</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">方式</th><th scope="col">向く要件</th><th scope="col">運用の特徴</th></tr></thead><tbody><tr><th scope="row">Managed Node Group</th><td>Windows、GPU、カスタムAMI、細かなEC2設定</td><td>EC2／Node更新は利用者が計画</td></tr><tr><th scope="row">AWS Fargate</th><td>Nodeを持たずPod単位で実行</td><td>制約を確認し、Pod実行分を課金</td></tr><tr><th scope="row">EKS Auto Mode</th><td>標準的なLinuxワークロード、運用省力化</td><td>Node・ネットワーク・LB・ストレージをAWSが広く管理</td></tr><tr><th scope="row">Self-managed Node</th><td>最大限の制御が必要</td><td>AMI、更新、登録、ドレインを自主管理</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>Managed Node GroupはEC2 Auto Scaling GroupをEKSが管理し、Node作成・更新・終了時のドレインを支援します。EKS Auto ModeはKarpenterを基盤に、スケジュールできないPodに合わせてNodeを作成し、不要なNodeを統合・終了します。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/eks/latest/userguide/eks-compute.html" target="_blank" rel="noopener">EKSの計算資源</a>、<a href="https://docs.aws.amazon.com/eks/latest/userguide/automode.html" target="_blank" rel="noopener">EKS Auto Mode</a></p>
+            <div data-eks-advisor class="eks-advisor">
+              <h4 class="font-bold text-sky-900">構成アドバイザー</h4>
+              <p class="ct-copy mt-2">主な要件を選ぶと、出発点となる構成を表示します。</p>
+              <label>要件
+                <select data-eks-scenario>
+                  <option value="standard">一般的なLinuxアプリを少ない運用負荷で実行</option>
+                  <option value="custom">Windows／カスタムAMI／細かなEC2設定が必要</option>
+                  <option value="serverless">Nodeを管理せず、対応するPodを実行</option>
+                  <option value="s3">プライベートPodからS3を読み取る</option>
+                  <option value="http">HTTPアプリをパスベースで公開</option>
+                  <option value="scale">負荷に合わせPodとNodeを増減</option>
+                </select>
+              </label>
+              <div class="eks-advisor-result" aria-live="polite"><small>RECOMMENDATION</small><strong data-eks-result>EKS Auto Mode</strong><p data-eks-detail></p></div>
+            </div>
+            <div data-quiz data-id="eks-q3" data-answer="a" data-explanation="WindowsやカスタムAMI、起動テンプレートによる細かなEC2制御が必要ならManaged Node Groupが有力です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q3. Windowsコンテナと独自AMIを使い、起動テンプレートも制御したい。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="eks-q3" value="a"><span>Managed Node Group</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q3" value="b"><span>EKS Auto Modeだけを使う</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q3" value="c"><span>Gateway VPC Endpointだけを使う</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q3" value="d"><span>CloudTrailだけを使う</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="network" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：ネットワークと権限を分ける</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 VPC CNIとIPアドレス</h3>
+            <div class="ct-copy"><p>Amazon VPC CNIは各EC2 NodeへElastic Network Interface（ENI）をアタッチし、各PodへVPCのプライベートIPv4またはIPv6アドレスを割り当てます。PodがVPC内のRDSやS3 Endpointと直接ルーティングしやすい一方、Pod数に応じてサブネットのIPを消費します。</p><p>Nodeを増やせない、PodがPendingになる場合は、CPUやメモリだけでなく、利用可能なIP、ENI上限、セキュリティグループ、VPC CNIの状態も確認します。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/eks/latest/userguide/managing-vpc-cni.html" target="_blank" rel="noopener">Amazon VPC CNI</a></p>
+            <div data-fill data-id="eks-q4" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q4. EKSのEC2 Nodeで、PodへVPCのIPを割り当てる標準アドオンは？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="Amazon VPC CNI|VPC CNI|AWS VPC CNI" aria-label="PodへVPC IPを割り当てるアドオン" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 PodのAWS権限はPod単位で与える</h3>
+            <div class="ct-copy"><p>人やCI/CDがKubernetes APIを操作する権限と、PodがS3などのAWS APIを呼ぶ権限は別物です。前者はIAM認証とKubernetes RBAC、後者はKubernetes ServiceAccountへEKS Pod IdentityまたはIRSAを関連付けて制御します。</p><p>EKS Pod IdentityではPod Identity Agentと関連付けを使い、対応AWS SDKへ一時クレデンシャルを渡します。AWSは可能な場合にEKS Pod Identityを推奨しています。アプリごとに専用ロールを用意し、必要なS3プレフィックスと操作だけを許可します。</p></div>
+            <div class="ct-note"><strong>Node IAM Roleをアプリ共通の権限箱にしません。</strong>同じNode上の別Podまで権限を得ないよう、ServiceAccount境界で最小権限を設計します。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/eks/latest/userguide/service-accounts.html" target="_blank" rel="noopener">Kubernetes ServiceAccountでAWSへアクセス</a></p>
+            <div data-quiz data-id="eks-q5" data-answer="d" data-explanation="Podごとの最小権限には、専用ServiceAccountとEKS Pod Identity（またはIRSA）を使います。ネットワーク経路としてS3 Gateway Endpointも別途必要です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q5. 特定の集計PodだけにS3読み取り権限を与える最も適切な方法は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="eks-q5" value="a"><span>全NodeのIAM RoleへS3FullAccessを付ける</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q5" value="b"><span>アクセスキーをコンテナイメージへ埋め込む</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q5" value="c"><span>セキュリティグループだけでS3操作を許可する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q5" value="d"><span>専用ServiceAccountへEKS Pod Identityを関連付ける</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.3 API Endpointとアプリ公開経路</h3>
+            <div class="ct-copy"><p>EKSクラスタのAPI Endpointは <code>kubectl</code> などが操作する管理面の入口です。Public AccessはCIDR制限を行い、Private Accessを有効にするとNodeからAPI Serverへの通信をVPC内に保てます。Private onlyでは管理端末やCI/CDもVPCへ到達できる必要があります。</p><p>一方、アプリ利用者の入口はKubernetes IngressやServiceです。AWS Load Balancer ControllerはIngressからALBを、LoadBalancer型ServiceからNLBを作成できます。管理APIと業務アプリの入口を混同しないことが重要です。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html" target="_blank" rel="noopener">EKS API Server Endpoint</a>、<a href="https://docs.aws.amazon.com/eks/latest/userguide/aws-load-balancer-controller.html" target="_blank" rel="noopener">AWS Load Balancer Controller</a></p>
+            <div data-quiz data-multiple data-id="eks-q6" data-answer="a,c" data-explanation="Private API Endpointは管理面のVPC内通信に使い、HTTPアプリの外部公開はIngressとALBで設計します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q6. 正しい組み合わせを2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="eks-q6" value="a"><span>Private API Endpoint：NodeからAPI Serverへの通信をVPC内に保つ</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="eks-q6" value="b"><span>API Endpoint：Webアプリ利用者向けの画面を配信する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="eks-q6" value="c"><span>Ingress＋AWS Load Balancer Controller：HTTPアプリ用ALBを作る</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="eks-q6" value="d"><span>Gateway Endpoint：kubectlのRBACを設定する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="operations" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：伸縮・更新・観測を運用する</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.1 PodとNodeは別々にスケールする</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">対象</th><th scope="col">代表機能</th><th scope="col">見るもの</th></tr></thead><tbody><tr><th scope="row">Pod数</th><td>Horizontal Pod Autoscaler（HPA）</td><td>CPU、メモリ、カスタムメトリクス</td></tr><tr><th scope="row">Node数・種類</th><td>EKS Auto Mode、Karpenter、Cluster Autoscaler</td><td>スケジュール不能Pod、Node使用状況</td></tr><tr><th scope="row">リクエスト処理</th><td>ALB / NLB</td><td>ヘルスチェック、接続、レイテンシ</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>HPAがPodを増やしても、空きNodeがなければPodはPendingのままです。反対にNodeを増やしても、Deploymentのレプリカ数は自動では増えません。Podの <code>requests</code> を適切に設定し、PodスケールとNodeスケールを組み合わせます。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html" target="_blank" rel="noopener">EKSのNodeオートスケーリング</a></p>
+            <div data-quiz data-id="eks-q7" data-answer="b" data-explanation="HPAがPod数を増やし、Node側のAuto Mode／Karpenter／Cluster Autoscalerが必要な計算容量を用意します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q7. CPU負荷でPodを増やし、置き場所が不足したらNodeも増やしたい。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="eks-q7" value="a"><span>HPAだけ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q7" value="b"><span>HPA＋Nodeオートスケーリング</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q7" value="c"><span>S3 Lifecycleだけ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q7" value="d"><span>CloudTrailログ整合性だけ</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.2 アップグレードは一段ずつ進める</h3>
+            <div class="ct-copy"><p>Kubernetesの新バージョンではAPI廃止や互換性変更が起こります。EKS Upgrade Insightsとテスト環境で影響を確認し、コントロールプレーンを1マイナーバージョンずつ更新します。</p><p>その後、Node、VPC CNI・CoreDNS・kube-proxyなどのAdd-on、アプリケーション、kubectlなどのクライアントを対応させます。PodDisruptionBudget（PDB）、複数レプリカ、Readiness Probeを用意し、Nodeのドレイン中も必要な可用性を維持します。</p></div>
+            <div class="ct-flow" aria-label="EKSアップグレードの順序"><div><small>01 PRECHECK</small><strong>Insightsと検証</strong><p>廃止API、互換性、バックアップ</p></div><div><small>02 CONTROL</small><strong>Control Plane</strong><p>1マイナーバージョンずつ</p></div><div><small>03 DATA</small><strong>Nodes / Add-ons</strong><p>段階更新し、アプリを確認</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/eks/latest/userguide/update-cluster.html" target="_blank" rel="noopener">EKSクラスタの更新</a></p>
+            <div data-quiz data-id="eks-q8" data-answer="c" data-explanation="まず廃止APIなどを検査し、コントロールプレーンを次のマイナーバージョンへ、その後NodeとAdd-onを更新します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q8. EKSの安全なアップグレード順序として最も適切なのは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="eks-q8" value="a"><span>Nodeをすべて同時停止 → 2バージョン飛ばしてControl Plane更新</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q8" value="b"><span>Add-onを無視してControl Planeだけ更新</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q8" value="c"><span>Insights／検証 → Control Plane → Nodes／Add-ons</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q8" value="d"><span>アプリの動作確認は本番更新後だけ行う</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.3 ログ・メトリクス・イベントを組み合わせる</h3>
+            <div class="ct-copy"><p>EKSのコントロールプレーンログにはAPI Server、Audit、Authenticator、Controller Manager、Schedulerがあります。既定ではCloudWatch Logsへ送信されないため、必要な種類を有効化し、保持期間とコストを設計します。</p><p>PodがPendingならKubernetes EventsとSchedulerログ、アプリ異常ならPodログとProbe、Node不足なら容量とIP、権限拒否ならCloudTrailとAuditログを確認します。CloudWatch Observability EKS Add-onを使うと、Container Insightsなどでログ・メトリクス・トレースを収集できます。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/eks/latest/userguide/control-plane-logs.html" target="_blank" rel="noopener">EKSコントロールプレーンログ</a>、<a href="https://docs.aws.amazon.com/eks/latest/userguide/cloudwatch.html" target="_blank" rel="noopener">CloudWatchによるEKS監視</a></p>
+            <div data-quiz data-multiple data-id="eks-q9" data-answer="a,d" data-explanation="Kubernetes APIの操作追跡にはAuditログ、スケジュールできないPodの調査にはEventsやSchedulerログが有効です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q9. 運用上の対応として適切なものを2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="eks-q9" value="a"><span>API操作の追跡にAuditログを有効化する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="eks-q9" value="b"><span>すべてのログを無期限保存し、料金は考慮しない</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="eks-q9" value="c"><span>Pending Podは必ずアプリコードだけを疑う</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="eks-q9" value="d"><span>Pending PodはEventsとSchedulerログも調べる</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">5</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：プライベートな集計ワークロード</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <h3 class="text-lg font-bold text-sky-900 mb-3">要件</h3>
+          <div class="ct-copy"><p>EKS上のバッチPodが、同一リージョンのS3にあるParquetログを読み取ります。PodとNodeはプライベートサブネットで動き、一般インターネットへの経路は不要です。他のPodへS3権限を広げず、負荷増加時はPodとNodeを増やしたいとします。</p></div>
+          <div data-quiz data-multiple data-id="eks-q10" data-answer="a,b,d" data-explanation="ネットワークはS3 Gateway Endpoint、権限は専用ServiceAccount＋Pod Identity、伸縮はHPAとNodeオートスケーリングを組み合わせます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q10. 要件を満たす要素を3つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="eks-q10" value="a"><span>S3 Gateway VPC Endpointを対象ルート表へ関連付ける</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="eks-q10" value="b"><span>専用ServiceAccountへS3読み取り用Pod Identityを関連付ける</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="eks-q10" value="c"><span>全NodeへAdministratorAccessを付与する</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="eks-q10" value="d"><span>requestsを設定し、HPAとNodeオートスケーリングを組み合わせる</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+        </div>
+      </section>
+
+      <section id="devops-guru" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">6</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">追加演習：動的スケーリングと運用異常の分析</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th>目的</th><th>機能</th><th>注意点</th></tr></thead><tbody><tr><td>急増するアクセスに合わせてPod数を増減</td><td>Horizontal Pod Autoscaler</td><td>Metrics Server／カスタムメトリクスと適切なrequestsが必要</td></tr><tr><td>Podを配置するNode容量を増減</td><td>Karpenter、Cluster Autoscaler、EKS Auto Mode</td><td>HPAだけではNode不足を解消しない</td></tr><tr><td>異常検出と原因・対処の推奨</td><td>Container Insights＋Amazon DevOps Guru</td><td>DevOps GuruがEKSを分析するにはContainer Insightsのメトリクスが必要</td></tr></tbody></table></div>
+          <div class="ct-note mt-4"><strong>VPAとの違い：</strong>VPAは各PodのCPU／メモリ要求量を調整します。同時リクエストの急増へレプリカ数で対応する主役はHPAです。</div>
+          <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/devops-guru/latest/userguide/enable-services-for-devops-guru.html" target="_blank" rel="noopener">DevOps GuruでEKSを分析する</a></p>
+          <div data-quiz data-id="eks-q11" data-answer="c" data-explanation="Container InsightsがEKSの運用メトリクスを生成し、DevOps Guruが異常を分析して推奨事項を提示します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q11. EKSの異常検出に加えて対処の推奨も得たい。適切な組み合わせは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="eks-q11" value="a"><span>Container Insightsだけ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q11" value="b"><span>CloudWatch異常検出だけ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="eks-q11" value="c"><span>Container Insights＋DevOps Guru</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+        </div>
+      </section>
+
+      <section class="tb-card p-5 sm:p-7">
+        <h2 class="text-xl font-bold text-sky-950">次のステップ</h2>
+        <ul class="mt-4 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500"><li>検証クラスタでDeployment、Service、Ingress、HPAを小さく動かす。</li><li>Pod IdentityとS3 Gateway Endpointを使い、権限と経路を別々にテストする。</li><li>Upgrade Insights、PDB、Control Plane Logsを本番前の運用チェックリストへ入れる。</li></ul>
+      </section>
+    </article>
+  </main>
+  <script src="../../../assets/shared.js?v=20261029-13"></script>
+</body>
+</html>

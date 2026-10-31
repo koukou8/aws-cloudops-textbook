@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="ja" data-topic-id="cloud-aws-network-gateways">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="AWSのInternet Gateway、NAT Gateway、Egress-only Internet Gateway、Transit Gateway、VPC Endpointを比較し、IPv6アウトバウンド、Direct ConnectからS3へのプライベート接続、マルチリージョン設計まで学ぶ通常版教材。">
+  <title>AWSネットワークゲートウェイ | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css?v=20261029-12">
+</head>
+<body>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/70 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900 whitespace-nowrap">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS","href":"../../../index.html#cloud"},{"label":"ネットワークゲートウェイ"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24">
+    <section class="relative">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4"><span class="tb-badge">通常版 · 約75分</span><span class="tb-badge is-basic">基礎</span><span class="tb-badge is-applied">応用</span><span class="tb-badge is-prac">実務</span></div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950 leading-tight">AWSネットワークゲートウェイ</h1>
+        <p class="mt-3 text-base sm:text-lg text-sky-800/80 leading-relaxed max-w-3xl">「誰と、どちら向きに、どのIPで通信するか」を決めれば、似た名前のゲートウェイを迷わず選べます。インターネット、オンプレミス、複数VPC、AWSサービス、セキュリティ検査の5経路を整理します。</p>
+
+        <div class="tb-card mt-7 p-5 sm:p-7">
+          <p class="text-xs font-bold tracking-widest text-sky-600">今回のIPv6設問</p>
+          <p class="mt-2 text-lg font-bold text-sky-950">Egress-only Internet GatewayをVPCへ作成し、プライベートサブネットの <code>::/0</code> を向けます。</p>
+          <p class="ct-copy mt-2">Egress-only Internet GatewayはIPv6専用かつステートフルです。VPC内から開始した通信とその応答は通しますが、インターネット側から新しく開始されるIPv6接続は拒否します。既存のIPv4経路 <code>0.0.0.0/0 → NAT Gateway</code> は変更せず、IPv6経路を別に追加します。</p>
+          <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/vpc/latest/userguide/egress-only-internet-gateway.html" target="_blank" rel="noopener">Egress-only Internet Gateway</a>、<a href="https://docs.aws.amazon.com/vpc/latest/userguide/vpc-migrate-ipv6-add.html" target="_blank" rel="noopener">VPCへIPv6サポートを追加する</a></p>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-7">
+          <h2 class="font-bold text-sky-900">この教材で学べること</h2>
+          <ul class="mt-3 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500">
+            <li>IGW、NAT Gateway、Egress-only IGWを通信方向とIPバージョンで選ぶ。</li>
+            <li>VGW／CGWとTransit Gatewayで、複数アカウント・複数リージョンのVPCを接続する。</li>
+            <li>Gateway型／Interface型VPC Endpointを接続元で選び、Direct ConnectからS3へのプライベート経路を設計する。</li>
+            <li>Gateway Load Balancerの役割を理解し、ネットワーク検査のルートまで設計する。</li>
+          </ul>
+          <nav class="flex flex-wrap gap-3 mt-5 text-sm text-sky-700" aria-label="目次"><a href="#basics" class="underline underline-offset-4">インターネット</a><a href="#hybrid" class="underline underline-offset-4">ハイブリッド</a><a href="#private" class="underline underline-offset-4">プライベート接続</a><a href="#operations" class="underline underline-offset-4">実務</a><a href="#case" class="underline underline-offset-4">構成演習</a></nav>
+        </div>
+
+        <div class="tb-card mt-4 p-5 sm:p-6"><div class="flex justify-between items-center gap-4 mb-2"><span class="font-semibold text-sm text-sky-900">学習進捗</span><div class="flex items-center gap-3"><span data-progress-pct class="text-sm font-bold text-sky-700">0%</span><button data-progress-reset class="text-xs text-slate-500 underline">リセット</button></div></div><div class="tb-progress"><div data-progress-bar style="width:0%"></div></div><p class="mt-2 text-xs text-slate-500">19問の正解状況を、このブラウザに保存します。既存16問の進捗は引き継がれます。</p></div>
+      </div>
+    </section>
+
+    <article class="mt-10 space-y-12">
+      <section id="basics" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">1</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">基礎編：インターネットへの出口を選ぶ</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.1 ゲートウェイだけでは通信できない</h3>
+            <div class="ct-copy"><p>AWSのネットワーク通信は「送信元」「宛先」「ルート表の次ホップ」「戻り道」「セキュリティ制御」を一組で考えます。ゲートウェイを作成しただけでは経路は完成しません。</p><p>たとえばEC2をIPv4でインターネット公開するには、サブネットのルート表に <code>0.0.0.0/0 → igw-...</code> があり、EC2にパブリックIPv4またはElastic IPが必要です。セキュリティグループとネットワークACLも通信を許可している必要があります。</p></div>
+            <div class="ct-flow" aria-label="通信経路を成立させる要素"><div><small>SOURCE</small><strong>送信元</strong><p>サブネットとIPアドレス</p></div><div><small>ROUTE</small><strong>ルート表</strong><p>宛先から次ホップを選択</p></div><div><small>GATEWAY</small><strong>境界を通過</strong><p>戻り道と許可も確認</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html" target="_blank" rel="noopener">Internet Gateway</a></p>
+            <div data-quiz data-id="gateway-q1" data-answer="c" data-explanation="IPv4でIGWを通るには、IGWへのルートとEC2のパブリックIPv4／Elastic IPの両方が必要です。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q1. EC2をIPv4でインターネット公開するために必要な組み合わせは？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="gateway-q1" value="a"><span>IGWを作成するだけ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q1" value="b"><span>EC2にプライベートIPv4だけを付与</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q1" value="c"><span>IGWへのルート＋EC2のパブリックIPv4／Elastic IP</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q1" value="d"><span>NAT Gatewayをプライベートサブネットへ配置</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.2 IGW、NAT Gateway、Egress-only IGW</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">サービス</th><th scope="col">主なIP</th><th scope="col">通信方向</th><th scope="col">代表用途</th></tr></thead><tbody><tr><th scope="row">Internet Gateway</th><td>IPv4 / IPv6</td><td>送受信</td><td>公開Web、公開ALB</td></tr><tr><th scope="row">Public NAT Gateway</th><td>主にIPv4</td><td>VPC側から開始</td><td>プライベートサブネットの更新取得</td></tr><tr><th scope="row">Egress-only IGW</th><td>IPv6のみ</td><td>VPC側から開始</td><td>IPv6の外向き通信</td></tr></tbody></table></div>
+            <div class="ct-copy mt-4"><p>Public NAT Gatewayはパブリックサブネットに置き、Elastic IPを関連付けます。プライベートサブネットのデフォルトルートをNAT Gatewayへ向け、NAT Gateway側はIGWを通ってインターネットへ出ます。可用性をAZ単位で設計するときは、各AZにNAT Gatewayを置き、同じAZのプライベートサブネットから使う構成を検討します。</p><p>IPv6はグローバルに一意なため、IPv4のようなアドレス変換をせず、外向き開始だけを許可したい場合はEgress-only IGWを使います。</p></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html" target="_blank" rel="noopener">NAT Gateway</a>、<a href="https://docs.aws.amazon.com/vpc/latest/userguide/egress-only-internet-gateway.html" target="_blank" rel="noopener">Egress-only Internet Gateway</a></p>
+            <div data-quiz data-id="gateway-q2" data-answer="b" data-explanation="プライベートIPv4インスタンスから外部へ開始する通信にはPublic NAT Gatewayを使います。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q2. プライベートIPv4のEC2からOS更新を取得し、外部からの未承諾接続は受けたくない。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="gateway-q2" value="a"><span>Internet GatewayへEC2を直接公開</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q2" value="b"><span>Public NAT Gateway</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q2" value="c"><span>Customer Gateway</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q2" value="d"><span>Gateway Load Balancer</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+            <div data-fill data-id="gateway-q3" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q3. IPv6でVPCから開始する外向き通信だけを許可するゲートウェイは？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="Egress-only Internet Gateway|Egress-only IGW|egress only internet gateway|egress-only internet gateway" aria-label="IPv6の外向き専用ゲートウェイ" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">1.3 既存VPCをIPv6対応する：出口をIPバージョンごとに分ける</h3>
+            <div class="ct-copy"><p>既存のIPv4 VPCへIPv6 CIDRを関連付け、各サブネットへIPv6 CIDRを割り当てても、インターネット経路は自動では完成しません。パブリックサブネットは <code>::/0 → Internet Gateway</code>、アウトバウンド専用のプライベートサブネットは <code>::/0 → Egress-only Internet Gateway</code> とします。</p><p>Egress-only Internet GatewayはVPCへ作成する高可用なマネージドコンポーネントで、サブネット内へ配置するものではありません。複数のプライベートサブネットのルートテーブルから同じゲートウェイを参照できます。ゲートウェイにはセキュリティグループを関連付けられないため、ワークロードのセキュリティグループとサブネットのネットワークACLも確認します。</p></div>
+            <div class="ct-flow" aria-label="デュアルスタックのプライベートサブネットからの出口"><div><small>PRIVATE SUBNET</small><strong>Dual-stack resource</strong><p>IPv4とIPv6を個別に経路選択</p></div><div><small>IPv4 · 0.0.0.0/0</small><strong>Public NAT Gateway</strong><p>IPv4のアドレス変換</p></div><div><small>IPv6 · ::/0</small><strong>Egress-only IGW</strong><p>変換せず外向き開始だけ許可</p></div></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">要件</th><th scope="col">宛先プレフィックス</th><th scope="col">ルートのターゲット</th><th scope="col">外部からの新規開始</th></tr></thead><tbody><tr><th scope="row">公開IPv6</th><td><code>::/0</code></td><td>Internet Gateway</td><td>経路上は可能。SG／NACLで制御</td></tr><tr><th scope="row">外向き専用IPv6</th><td><code>::/0</code></td><td>Egress-only Internet Gateway</td><td>ゲートウェイが拒否</td></tr><tr><th scope="row">外向きIPv4</th><td><code>0.0.0.0/0</code></td><td>Public NAT Gateway</td><td>NAT経由の未承諾接続は不可</td></tr><tr><th scope="row">IPv6からIPv4専用宛先</th><td><code>64:ff9b::/96</code></td><td>NAT Gateway（NAT64）</td><td>IPv6側から開始</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/vpc/latest/userguide/egress-only-internet-gateway-working-with.html" target="_blank" rel="noopener">Egress-only IGWの作成とルーティング</a>、<a href="https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html" target="_blank" rel="noopener">Internet Gateway</a></p>
+            <div data-quiz data-id="gateway-q14" data-answer="b" data-explanation="プライベートサブネットのネイティブIPv6をアウトバウンド専用にするには、VPCへEgress-only Internet Gatewayを作成し、::/0を向けます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">追加演習D. IPv4ではNAT Gateway経由で通信できるが、プライベートサブネットのIPv6だけインターネットへ出られない。適切な対応は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="gateway-q14" value="a"><span>既存NAT GatewayにIPv6変換を有効化し、<code>::/0</code>を向ける</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q14" value="b"><span>Egress-only Internet Gatewayを作り、<code>::/0</code>を向ける</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q14" value="c"><span>プライベートサブネットの<code>::/0</code>をIGWへ直接向ける</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q14" value="d"><span>IPv6専用NAT Gatewayを新規作成する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+            <div data-quiz data-id="gateway-q15" data-answer="c" data-explanation="IGWはIPv6の双方向通信を可能にする経路です。実際のインバウンド可否にはSGとNACLも関係しますが、IGW自体は外向き専用制御を提供しません。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">追加演習E. プライベートサブネットの <code>::/0</code> を既存IGWへ向けない理由は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="gateway-q15" value="a"><span>IGWはIPv4しか扱えないため</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q15" value="b"><span>IPv6ではルートテーブルを使えないため</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q15" value="c"><span>IGWは外向き専用制御を提供せず、サブネットがIPv6でインターネット到達可能になるため</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q15" value="d"><span>IGWには必ずElastic IPが必要なため</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+            <div data-quiz data-id="gateway-q16" data-answer="d" data-explanation="NAT64はIPv6ワークロードからIPv4専用宛先へ接続するための変換です。ネイティブIPv6の外向き専用通信はEgress-only IGWが担当します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">追加演習F. NAT64／DNS64が解決する要件は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="gateway-q16" value="a"><span>IPv4ワークロードからIPv6専用宛先へ変換する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q16" value="b"><span>IPv6アドレスを別のIPv6アドレスへ変換する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q16" value="c"><span>インターネットからのIPv6接続をすべて受け付ける</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q16" value="d"><span>IPv6ワークロードからIPv4専用サービスへ接続する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+            <details class="tb-accordion mt-5"><summary>NAT Gatewayは「IPv4専用」なのか</summary><div class="tb-accordion-body"><p>ネイティブIPv6インターネット通信のデフォルトルートをNAT Gatewayへ向けることはできません。一方、既存のNAT GatewayにはNAT64が自動的に備わっており、DNS64が合成した <code>64:ff9b::/96</code> 宛ての通信をIPv4へ変換できます。つまり「IPv6の出口」ではなく「IPv6からIPv4専用宛先へ渡す変換器」として使います。</p><p class="ct-source">出典：<a href="https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateway-nat64-dns64.html" target="_blank" rel="noopener">DNS64とNAT64</a></p></div></details>
+          </div>
+        </div>
+      </section>
+
+      <section id="hybrid" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">2</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">応用編：オンプレミスと複数VPCをつなぐ</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.1 VGWとCGWはVPNの両端</h3>
+            <div class="ct-copy"><p>AWS Site-to-Site VPNでは、AWS側の終端としてVirtual Private Gateway（VGW）またはTransit Gatewayを使います。Virtual Private GatewayはVPCへアタッチするVPNコンセントレータです。</p><p>Customer Gateway（CGW）は、オンプレミス側の物理ルーターやソフトウェアVPN装置そのものではなく、その装置をAWS内で表すリソースです。実機・仮想装置はCustomer Gateway Deviceと呼びます。VPN接続には冗長な2本のトンネルがあります。</p></div>
+            <div class="ct-flow" aria-label="Site-to-Site VPNの両端"><div><small>ON-PREMISES</small><strong>CGW Device</strong><p>実際のルーター／VPN装置</p></div><div><small>AWS RESOURCE</small><strong>Customer Gateway</strong><p>装置情報をAWS内で表現</p></div><div><small>AWS SIDE</small><strong>VGW または TGW</strong><p>2本のVPNトンネルを終端</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/vpn/latest/s2svpn/how_it_works.html" target="_blank" rel="noopener">AWS Site-to-Site VPNの仕組み</a></p>
+            <div data-quiz data-multiple data-id="gateway-q4" data-answer="a,d" data-explanation="VGWはAWS側のVPN終端、CGWはオンプレミス装置をAWS内で表すリソースです。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q4. Site-to-Site VPNの説明として正しいものを2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="gateway-q4" value="a"><span>VGWはAWS側のVPN終端としてVPCへアタッチできる</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="gateway-q4" value="b"><span>CGWは必ずAWSが設置する物理ルーターである</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="gateway-q4" value="c"><span>VPNトンネルは1本だけである</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="gateway-q4" value="d"><span>CGWはオンプレミス装置をAWS内で表すリソースである</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.2 Transit Gatewayはネットワークのハブ</h3>
+            <div class="ct-copy"><p>VPCが増えると、VPC Peeringを総当たりで張る構成は接続数とルート管理が複雑になります。Transit Gateway（TGW）はVPC、VPN、Direct Connect Gateway、別TGWなどをアタッチする中継ハブです。</p><p>TGW自身のルートテーブルで、どのアタッチメントからどこへ転送できるかを分離できます。ただし、VPCサブネット側のルート表にもTGWへのルートが必要です。CIDRの重複は避けます。</p></div>
+            <div class="ct-note"><strong>通信は自動的に許可されません。</strong>VPCルート表、TGWルート表、戻り経路、セキュリティグループ／NACLを順番に確認します。</div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/vpc/latest/tgw/what-is-transit-gateway.html" target="_blank" rel="noopener">AWS Transit Gatewayとは</a></p>
+            <div data-quiz data-id="gateway-q5" data-answer="d" data-explanation="多数のVPCとオンプレミスをハブ＆スポークで相互接続する中心はTransit Gatewayです。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q5. 20個のVPCとオンプレミスを、中央のルート制御で接続したい。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="gateway-q5" value="a"><span>Internet Gateway</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q5" value="b"><span>Egress-only IGW</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q5" value="c"><span>各VPCにS3 Gateway Endpoint</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q5" value="d"><span>Transit Gateway</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">2.3 マルチアカウント・マルチリージョンのTransit Gateway</h3>
+            <div class="ct-copy"><p>Transit Gatewayはリージョン単位のハブです。中央アカウントに1つだけTGWを作っても、4リージョンのVPCをその1台へ直接アタッチする構成にはできません。ワークロードを配置する各リージョンにTGWを作り、そのリージョンのVPCをアタッチします。</p><p>AWS Organizations配下の別アカウントへは、AWS Resource Access Manager（AWS RAM）でTGWを共有できます。VPC所有アカウントは共有されたTGWへのVPCアタッチメントを作成でき、TGW所有アカウントがルートテーブルの関連付け・伝播・静的ルートを中央管理します。</p></div>
+
+            <div class="ct-flow" aria-label="マルチリージョンTransit Gatewayの構成"><div><small>EACH REGION</small><strong>リージョンごとにTGW</strong><p>同じリージョンのワークロードVPCをアタッチ</p></div><div><small>AWS RAM</small><strong>組織アカウントへ共有</strong><p>ネットワークアカウントがTGWと経路を管理</p></div><div><small>TGW PEERING</small><strong>リージョン間を接続</strong><p>共有VPCのCIDRへ静的ルートを追加</p></div></div>
+
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">方式</th><th scope="col">向いている範囲</th><th scope="col">今回の評価</th></tr></thead><tbody><tr><th scope="row">VPC Peering</th><td>少数VPCの1対1接続</td><td>非推移的。組み合わせごとの接続・ルートが増える</td></tr><tr><th scope="row">1台の中央TGW</th><td>単一リージョンの多数VPC</td><td>別リージョンのVPCを直接アタッチできない</td></tr><tr><th scope="row">PrivateLink</th><td>コンシューマーから特定サービスへ接続</td><td>汎用的な双方向VPCルーティングではない</td></tr><tr><th scope="row">各リージョンのTGW＋Peering</th><td>複数アカウント・複数リージョン</td><td>正解。リージョン内を集約し、リージョン間を接続</td></tr></tbody></table></div>
+
+            <details class="tb-accordion mt-4"><summary>静的ルートはどこへ設定する？</summary><div class="tb-accordion-body">ワークロードVPCのサブネットルート表では、共有VPCのCIDRを同一リージョンのTGWへ向けます。TGWルートテーブルでは、別リージョンのCIDRをTGW Peeringアタッチメントへ向けます。反対側にも戻り経路が必要です。ピアリングアタッチメントでは動的なルート伝播がないため、対象CIDRの変更管理が重要です。</div></details>
+
+            <div class="ct-note"><strong>セキュリティVPCは方向性も確認します。</strong>脆弱性スキャナーからワークロードへ接続を開始するなら、コンシューマーから提供サービスへ接続するPrivateLinkだけでは要件を満たしません。TGWルートテーブルで監査ログ用・セキュリティ用・ワークロード用の到達範囲を分離し、必要な方向だけ許可します。</div>
+
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/vpc/latest/tgw/working-with-transit-gateways.html" target="_blank" rel="noopener">AWS RAMによるTGW共有</a>、<a href="https://docs.aws.amazon.com/vpc/latest/tgw/how-transit-gateways-work.html" target="_blank" rel="noopener">TGWのルーティング</a>、<a href="https://docs.aws.amazon.com/vpc/latest/peering/vpc-peering-basics.html" target="_blank" rel="noopener">VPC Peeringの非推移性</a>、<a href="https://docs.aws.amazon.com/vpc/latest/privatelink/" target="_blank" rel="noopener">AWS PrivateLink</a></p>
+
+            <div data-quiz data-id="gateway-q11" data-answer="b" data-explanation="TGWはリージョン単位です。各リージョンにTGWを作り、同一リージョンのVPCをアタッチしてからTGW同士をピアリングします。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">追加演習A. 4リージョンのVPCを、中央アカウントのTGW 1台へ直接アタッチできる？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="gateway-q11" value="a"><span>できる。TGWは常にグローバルリソースだから</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q11" value="b"><span>できない。各リージョンにTGWが必要</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q11" value="c"><span>できるが、VPC Peeringも必須</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q11" value="d"><span>できない。TGWは別アカウントと共有できない</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+
+            <div data-fill data-id="gateway-q12" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">追加演習B. TGW Peeringアタッチメントを宛先に、TGWルートテーブルへ追加するルートの種類は？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="静的ルート|static route|static routes" aria-label="TGW Peeringで必要なルート" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+
+            <div data-quiz data-id="gateway-q13" data-answer="d" data-explanation="各リージョンにTGWを作り、AWS RAMで共有し、同一リージョンのVPCをアタッチします。リージョン間はTGW Peeringと静的ルートで接続します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">追加演習C. 4リージョン・複数アカウントから、監査VPCとセキュリティVPCへ拡張可能に接続する最適な構成は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="gateway-q13" value="a"><span>すべてのVPC間に個別のVPC Peeringを作る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q13" value="b"><span>中央アカウントの1台のTGWへ全リージョンのVPCを直接接続</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q13" value="c"><span>各共有VPCをPrivateLinkサービスとして公開するだけ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q13" value="d"><span>各リージョンにTGWを作成・共有し、TGW Peeringと静的ルートを設定</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+
+            <div class="ct-note mt-5"><strong>規模の目安：</strong>デフォルトでは1 TGWあたり5,000アタッチメント、1アカウント・1リージョンあたりTGW 5台です。実際の適用値はService Quotasで確認し、CIDR重複、ルート数、リージョン間データ転送、アタッチメント料金も設計に含めます。</div>
+            <p class="ct-source">クォータ出典：<a href="https://docs.aws.amazon.com/vpc/latest/tgw/transit-gateway-quotas.html" target="_blank" rel="noopener">AWS Transit Gateway Quotas</a></p>
+          </div>
+        </div>
+      </section>
+
+      <section id="private" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">3</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：AWSサービスと検査装置へつなぐ</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.1 Gateway VPC EndpointはS3／DynamoDB専用</h3>
+            <div class="ct-copy"><p>Gateway VPC Endpointを使うと、VPCからS3またはDynamoDBへ、IGWやNATデバイスを使わず到達できます。対象ルート表にはAWS管理プレフィックスリストを宛先、エンドポイントをターゲットとするルートが追加されます。追加料金はありません。</p><p>その他の多くのAWSサービスはInterface VPC Endpointを使います。Interface Endpointはサブネット内にプライベートIPを持つENIを作成し、PrivateLinkでサービスへ接続します。名前は似ていますが経路の作り方が異なります。</p></div>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">種類</th><th scope="col">対象</th><th scope="col">配置・経路</th><th scope="col">主な制御</th></tr></thead><tbody><tr><th scope="row">Gateway Endpoint</th><td>S3、DynamoDB</td><td>ルート表＋プレフィックスリスト</td><td>Endpoint Policy</td></tr><tr><th scope="row">Interface Endpoint</th><td>対応する多数のサービス</td><td>サブネットのENI／DNS</td><td>Security Group＋Endpoint Policy</td></tr></tbody></table></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/vpc/latest/privatelink/gateway-endpoints.html" target="_blank" rel="noopener">Gateway VPC Endpoint</a></p>
+            <div data-quiz data-multiple data-id="gateway-q6" data-answer="a,c" data-explanation="Gateway VPC Endpointの対象サービスはS3とDynamoDBです。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q6. Gateway VPC Endpointで接続できるサービスを2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="gateway-q6" value="a"><span>Amazon S3</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="gateway-q6" value="b"><span>AWS Systems Manager</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="gateway-q6" value="c"><span>Amazon DynamoDB</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="gateway-q6" value="d"><span>Amazon EC2 API</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+            <div data-quiz data-id="gateway-q7" data-answer="b" data-explanation="Interface VPC Endpointはサブネット内にプライベートIPを持つENIを作成し、対応サービスへPrivateLinkで接続します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q7. Systems Managerへインターネットを経由せず接続する代表的な方式は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="gateway-q7" value="a"><span>S3 Gateway Endpointだけを作る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q7" value="b"><span>必要なInterface VPC Endpointを作る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q7" value="c"><span>Customer Gatewayを作る</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q7" value="d"><span>Egress-only IGWをIPv4に使う</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.2 Direct ConnectからS3へ：Interface Endpointを選ぶ</h3>
+            <div class="ct-copy"><p>オンプレミスのポータルがDirect Connect経由でS3へ接続し、通信をプライベートIPとAWSネットワーク内に閉じたい場合は、S3用の<strong>Interface VPC Endpoint（AWS PrivateLink）</strong>を使います。エンドポイントは選択したサブネットにプライベートIPを持つENIを作るため、オンプレミスからPrivate VIFまたはTransit VIF経由でそのENIへ到達できます。</p><p>S3 Gateway Endpointは無料でVPC内のワークロードに適していますが、ルート表へ追加した経路をDirect Connect、VPN、VPC Peering、Transit Gatewayの反対側へ延長できません。したがって「Direct ConnectがあるからGateway Endpointも使える」とは判断しません。</p></div>
+
+            <div class="ct-flow" aria-label="オンプレミスからS3へのプライベート経路"><div><small>ON-PREMISES</small><strong>PII処理ポータル</strong><p>S3名をプライベートIPへ解決</p></div><div><small>DIRECT CONNECT</small><strong>Private / Transit VIF</strong><p>VPCへの専用経路</p></div><div><small>VPC ENDPOINT</small><strong>Interface Endpoint ENI</strong><p>PrivateLinkでS3へ接続</p></div></div>
+
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">方式</th><th scope="col">S3で使うIP</th><th scope="col">オンプレミスから利用</th><th scope="col">費用・用途</th></tr></thead><tbody><tr><th scope="row">Gateway Endpoint</th><td>S3のパブリックIP</td><td>不可</td><td>追加料金なし。VPC内の通信向け</td></tr><tr><th scope="row">Interface Endpoint</th><td>VPCサブネットのプライベートIP</td><td>可能</td><td>時間・データ処理課金。DX／VPN経由向け</td></tr><tr><th scope="row">DX Public VIF</th><td>AWSサービスのパブリックIP</td><td>可能</td><td>ISPを迂回できるが、プライベートIP接続ではない</td></tr></tbody></table></div>
+
+            <div class="ct-note"><strong>DNSまで設計して初めて完成です。</strong>オンプレミスDNSからRoute 53 ResolverのInbound EndpointへS3の名前解決を転送し、通常のS3名をInterface EndpointのプライベートIPへ解決させます。エンドポイント固有のDNS名をアプリケーションへ明示する方法もあります。Interface EndpointのSecurity GroupではオンプレミスCIDRからのTCP 443を許可し、経路と戻り道も確認します。</div>
+
+            <details class="tb-accordion mt-4"><summary>Gateway型とInterface型を併用して料金を最適化する</summary><div class="tb-accordion-body">同じVPCに両方を作成できます。S3 Interface Endpointで「Private DNS only for inbound Resolver endpoint」を使うと、オンプレミスからのDNS問い合わせはInterface EndpointのプライベートIPへ、VPC内からの問い合わせは追加料金のないGateway Endpointへ誘導できます。この設定には同じVPCのS3 Gateway Endpointが必要です。</div></details>
+
+            <div class="ct-copy mt-4"><p><strong>アクセス制御：</strong>Endpoint Policyで利用可能なS3操作・バケットを絞り、S3バケットポリシーでは必要に応じて <code>aws:SourceVpce</code> で当該Interface Endpoint経由だけを許可します。誤設定するとAWSコンソールや別経路からのデータアクセスも拒否するため、管理経路と復旧手順を先に確認します。</p><p><strong>選択肢の読み方：</strong>S3 Transfer Accelerationは遠距離転送の高速化、パススタイルURLは名前の表記方法です。どちらもPrivate VIFからプライベートIPでS3へ接続する経路にはなりません。なおPublic VIFならS3のパブリックIPへDirect Connect経由で到達できるため、「S3のパブリックエンドポイントは必ずインターネット経由」と覚えるのも誤りです。今回の選択肢では、プライベートIPとPrivateLinkを使えるInterface Endpointが要件に最も合います。</p></div>
+
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/privatelink-interface-endpoints.html" target="_blank" rel="noopener">AWS PrivateLink for Amazon S3</a>、<a href="https://docs.aws.amazon.com/vpc/latest/privatelink/vpc-endpoints-s3.html" target="_blank" rel="noopener">Gateway endpoints for Amazon S3</a>、<a href="https://docs.aws.amazon.com/directconnect/latest/UserGuide/WorkingWithVirtualInterfaces.html" target="_blank" rel="noopener">Direct Connect virtual interfaces</a></p>
+
+            <div data-quiz data-id="gateway-q17" data-answer="d" data-explanation="S3 Interface EndpointはVPC内にプライベートIPを持つENIを作ります。オンプレミスからDirect Connect経由で到達でき、PrivateLinkを通じてS3へ接続できます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">追加演習G. Direct Connect接続済みのオンプレミスポータルから、プライベートIPでS3へ到達する最適な構成は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="gateway-q17" value="a"><span>S3 Transfer Accelerationを有効にする</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q17" value="b"><span>S3 Gateway Endpointを作り、VPCルート表だけを変更する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q17" value="c"><span>S3のURLをパススタイルへ変更する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q17" value="d"><span>S3 Interface Endpointを作成し、DX経由でそのプライベートIPへ接続する</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+
+            <div data-quiz data-multiple data-id="gateway-q18" data-answer="a,c" data-explanation="実通信には、オンプレミスからEndpoint ENIへの経路・TCP 443の許可が必要です。通常のS3名を使うなら、オンプレミスDNSからResolver Inbound Endpointへの転送も設計します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">追加演習H. S3 Interface Endpointをオンプレミスから使う際の重要な確認を2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="gateway-q18" value="a"><span>オンプレミスDNSとRoute 53 Resolver Inbound Endpointの名前解決経路</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="gateway-q18" value="b"><span>EC2へパブリックIPv4を割り当てること</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="gateway-q18" value="c"><span>Endpoint ENIへのルートと、Security GroupのTCP 443許可</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="gateway-q18" value="d"><span>Internet Gatewayへ <code>0.0.0.0/0</code> を追加すること</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+
+            <div data-quiz data-id="gateway-q19" data-answer="b" data-explanation="Public VIFではAWSサービスのパブリックIPへDirect Connect経由で到達できます。一方、Private／Transit VIFとInterface Endpointを組み合わせると、プライベートIPでS3へ接続できます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">追加演習I. Direct ConnectとS3について正しい説明は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="gateway-q19" value="a"><span>S3のパブリックエンドポイントは、Direct Connectがあっても必ずISP経由になる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q19" value="b"><span>Public VIFはS3のパブリックIPへ、Private／Transit VIFはInterface EndpointのプライベートIPへ接続できる</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q19" value="c"><span>Gateway Endpointの経路はDirect Connectのオンプレミスまで自動伝播する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q19" value="d"><span>Transfer AccelerationはPrivateLinkの別名である</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">3.3 Gateway Load Balancerは仮想アプライアンスを束ねる</h3>
+            <div class="ct-copy"><p>Gateway Load Balancer（GWLB）は、ファイアウォール、侵入検知・防止、ディープパケットインスペクションなどの仮想アプライアンスをデプロイ・スケール・管理します。OSIレイヤー3で全IPパケットを扱い、GENEVE（UDP 6081）でターゲットへ転送します。</p><p>利用側VPCではGateway Load Balancer Endpoint（GWLBe）をルート表の次ホップにし、検査VPCのGWLBへトラフィックを送ります。Webリクエストを振り分けるALBやTCP/UDP負荷分散のNLBとは目的が異なります。</p></div>
+            <div class="ct-flow" aria-label="Gateway Load Balancerによる検査"><div><small>APPLICATION VPC</small><strong>GWLBe</strong><p>ルート表の次ホップ</p></div><div><small>INSPECTION VPC</small><strong>GWLB</strong><p>正常な装置へ分散</p></div><div><small>APPLIANCES</small><strong>FW / IDS / IPS</strong><p>通信を透過的に検査</p></div></div>
+            <p class="ct-source">出典：<a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/gateway/introduction.html" target="_blank" rel="noopener">Gateway Load Balancerとは</a></p>
+            <div data-quiz data-id="gateway-q8" data-answer="a" data-explanation="GWLBはファイアウォールやIDS/IPSなど、透過的なネットワーク検査装置を分散・拡張します。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q8. 複数VPCの通信を、伸縮するファイアウォール群へ透過的に通したい。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="gateway-q8" value="a"><span>Gateway Load Balancer</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q8" value="b"><span>Application Load Balancer</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q8" value="c"><span>Internet Gatewayだけ</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q8" value="d"><span>S3 Transfer Acceleration</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="operations" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">4</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">実務編：選び方とトラブルシュート</h2></div>
+        <div class="space-y-8">
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.1 要件からゲートウェイを選ぶ</h3>
+            <div data-gateway-advisor class="gateway-advisor">
+              <h4 class="font-bold text-sky-900">経路アドバイザー</h4>
+              <p class="ct-copy mt-2">通信したい相手と方向を選んでください。</p>
+              <label>要件
+                <select data-gateway-scenario>
+                  <option value="public-ipv4">公開IPv4サービスをインターネットへ提供</option>
+                  <option value="private-ipv4">プライベートIPv4から外向きインターネット</option>
+                  <option value="private-ipv6">IPv6で外向きだけを許可</option>
+                  <option value="onprem-one">1つのVPCとオンプレミスをVPN接続</option>
+                  <option value="many-networks">多数のVPCとオンプレミスを集約</option>
+                  <option value="s3-private">プライベートサブネットからS3へ接続</option>
+                  <option value="inspection">仮想ファイアウォールで一元検査</option>
+                </select>
+              </label>
+              <div class="gateway-advisor-path" aria-live="polite"><div><small>SOURCE</small><strong data-gateway-source>Public subnet</strong></div><span aria-hidden="true">→</span><div><small>NEXT HOP</small><strong data-gateway-result>Internet Gateway</strong></div><span aria-hidden="true">→</span><div><small>DESTINATION</small><strong data-gateway-destination>Internet</strong></div></div>
+              <p data-gateway-detail class="gateway-advisor-result"></p>
+            </div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.2 つながらないときの確認順</h3>
+            <ol class="ct-steps"><li><strong>名前解決</strong><p>宛先DNSが期待するIPへ解決されるか。Interface EndpointならPrivate DNSも確認。</p></li><li><strong>送信元サブネットのルート</strong><p>最長一致で、期待するIGW・NAT・TGW・Endpointが選ばれるか。</p></li><li><strong>中継側のルート</strong><p>TGWルート表、GWLBe経路、VPNの伝播・静的ルートを確認。</p></li><li><strong>戻り道</strong><p>非対称ルーティングになっていないか。NATや検査装置を往復で通るか。</p></li><li><strong>許可と観測</strong><p>SG、NACL、Endpoint Policy、VPC Flow Logs、CloudWatchメトリクスを確認。</p></li></ol>
+            <div data-fill data-id="gateway-q9" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q9. パケットの宛先から次ホップを決めるVPCの設定は？</p><label class="text-sm text-slate-700">答え：<span class="tb-fill"><input data-answer="ルートテーブル|ルート表|route table|routing table" aria-label="次ホップを決める設定" placeholder="???"></span></label><button data-fill-submit class="mt-4 block rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">確認する</button></div>
+          </div>
+
+          <div class="tb-card p-5 sm:p-7">
+            <h3 class="text-lg font-bold text-sky-900 mb-3">4.3 「Gateway」という名前でも別分野</h3>
+            <div class="ct-table-wrap"><table class="ct-table"><thead><tr><th scope="col">サービス</th><th scope="col">役割</th><th scope="col">この教材のゲートウェイとの違い</th></tr></thead><tbody><tr><th scope="row">Amazon API Gateway</th><td>REST / HTTP / WebSocket APIの公開・認証・制御</td><td>アプリケーション層のAPI入口</td></tr><tr><th scope="row">AWS Storage Gateway</th><td>オンプレミスとAWSストレージのハイブリッド接続</td><td>ファイル・ボリューム・テープのストレージ連携</td></tr><tr><th scope="row">AWS Global Accelerator</th><td>Anycast IPとAWSグローバルネットワークでエンドポイントへ誘導</td><td>名前にGatewayはなく、S3 Transfer Accelerationの代替でもない</td></tr></tbody></table></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">5</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">総合演習：最短の経路を選ぶ</h2></div>
+        <div class="tb-card p-5 sm:p-7">
+          <h3 class="text-lg font-bold text-sky-900 mb-3">要件：アプリは非公開、S3だけを利用</h3>
+          <div class="ct-copy"><p>プライベートサブネットのEC2が同一リージョンのS3へバックアップを保存します。一般インターネットへのアクセスは不要です。余分なNAT経路と料金を避け、S3へのアクセス先をバケットポリシーとEndpoint Policyで限定したいとします。</p></div>
+          <div data-quiz data-id="gateway-q10" data-answer="c" data-explanation="S3 Gateway VPC EndpointならIGWやNATを使わず、ルート表のプレフィックスリスト経由でS3へ接続できます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q10. 最も直接的な構成は？</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="radio" name="gateway-q10" value="a"><span>EC2へパブリックIPを付けてIGWを使う</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q10" value="b"><span>Public NAT Gatewayだけを追加する</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q10" value="c"><span>S3 Gateway VPC Endpointを対象ルート表へ関連付ける</span></label></li><li><label class="tb-quiz-option"><input type="radio" name="gateway-q10" value="d"><span>Customer Gatewayを作る</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+        </div>
+      </section>
+
+      <section class="tb-card p-5 sm:p-7">
+        <h2 class="text-xl font-bold text-sky-950">次のステップ</h2>
+        <ul class="mt-4 list-disc pl-5 space-y-2 text-sm text-slate-700 marker:text-sky-500"><li>自分のVPC構成図に、各サブネットのルート表と戻り道を書き込む。</li><li>NAT Gateway、TGW、VPC Endpointの処理量とデータ転送料を見積もる。</li><li>Reachability AnalyzerとVPC Flow Logsを使い、想定経路を検証する。</li></ul>
+      </section>
+      <section id="vpn-nat-migration" class="scroll-mt-28">
+        <div class="flex items-center gap-2 mb-5"><span class="tb-section-num">+</span><h2 class="text-xl sm:text-2xl font-bold text-sky-950">追加演習：VPNのNAT越えとNAT Gateway移行</h2></div>
+        <div class="grid md:grid-cols-2 gap-5">
+          <div class="tb-card p-5 sm:p-6"><h3 class="font-bold text-sky-900">Customer GatewayがNATの背後にある</h3><p class="ct-copy mt-3">Customer Gatewayリソースには、AWS側から見えるNATデバイスの静的パブリックIPを指定します。オンプレミス機器のプライベートIPやMACアドレスではありません。機器とNATがNAT Traversal（UDP 4500）を通せること、必要なUDP 500/4500と経路も確認します。</p></div>
+          <div class="tb-card p-5 sm:p-6"><h3 class="font-bold text-sky-900">NAT InstanceからNAT Gatewayへ移行後に通信不能</h3><p class="ct-copy mt-3">まずNAT Gatewayが<code>Available</code>か、パブリックサブネットとElastic IP、プライベートサブネットのルートが正しいか確認します。NAT GatewayはTCP、UDP、ICMPを扱いますが、NAT Instanceのカスタム設定で通していたGREやIPsec等は代替できません。NAT Gatewayにはセキュリティグループを関連付けません。</p></div>
+        </div>
+        <div data-quiz data-multiple data-id="gateway-q20" data-answer="a,c" data-explanation="移行直後は状態がAvailableかを確認し、アプリがNAT Gateway非対応プロトコルへ依存していないかを調べます。" class="mt-5 rounded-2xl bg-sky-50/70 p-4 sm:p-5"><p class="font-semibold mb-3">Q20. NAT Gateway移行後の通信断で確認すべきものを2つ選んでください。</p><ul class="space-y-2"><li><label class="tb-quiz-option"><input type="checkbox" name="gateway-q20" value="a"><span>NAT Gatewayの状態</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="gateway-q20" value="b"><span>NAT Gatewayのセキュリティグループ</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="gateway-q20" value="c"><span>利用プロトコルの互換性</span></label></li><li><label class="tb-quiz-option"><input type="checkbox" name="gateway-q20" value="d"><span>MACアドレスの登録</span></label></li></ul><button data-quiz-submit class="mt-4 rounded-full bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 text-sm font-semibold">回答する</button></div>
+      </section>
+    </article>
+  </main>
+  <script src="../../../assets/shared.js?v=20261029-12"></script>
+</body>
+</html>

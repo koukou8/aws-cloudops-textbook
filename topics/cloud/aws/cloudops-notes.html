@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="ja" data-topic-id="cloud-aws-cloudops-notes">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="CloudFront、NAT Gateway、Route 53、S3、Systems ManagerなどのAWS CloudOps要点をMarkdownで確認できるクイックメモ。">
+  <title>AWS CloudOps クイックメモ | Engineer Textbook</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../../../assets/shared.css?v=20261101-1">
+  <style>
+    .notes-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+    .notes-toc { display: none; }
+    .notes-actions { display: flex; flex-wrap: wrap; gap: .65rem; }
+    .notes-button {
+      display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
+      border: 1px solid #bae6fd; border-radius: 999px; background: #fff;
+      color: #0369a1; padding: .65rem 1rem; font-size: .875rem; font-weight: 700;
+      transition: background .15s, border-color .15s;
+    }
+    .notes-button:hover { background: #f0f9ff; border-color: #7dd3fc; }
+    .notes-status { min-height: 1.25rem; color: #047857; font-size: .8rem; }
+    .md-prose { color: #334155; line-height: 1.85; }
+    .md-prose > h1 { display: none; }
+    .md-prose h2 {
+      margin: 2.6rem 0 1rem; padding: .7rem 1rem; border-left: 4px solid #38bdf8;
+      border-radius: 0 1rem 1rem 0; background: #f0f9ff; color: #0c4a6e;
+      font-size: 1.35rem; font-weight: 800; scroll-margin-top: 6rem;
+    }
+    .md-prose h2:first-of-type { margin-top: 0; }
+    .md-prose h3 {
+      margin: 1.7rem 0 .65rem; color: #075985; font-size: 1.08rem;
+      font-weight: 750; scroll-margin-top: 6rem;
+    }
+    .md-prose p { margin: .75rem 0 1.2rem; }
+    .md-prose ul { margin: .55rem 0 1rem; padding-left: 1.35rem; list-style: disc; }
+    .md-prose ul ul { margin: .35rem 0 .45rem; list-style: circle; }
+    .md-prose li { margin: .36rem 0; padding-left: .2rem; }
+    .md-prose li::marker { color: #0ea5e9; }
+    .md-prose code {
+      border-radius: .5rem; background: #e0f2fe; color: #075985;
+      padding: .12rem .38rem; font-size: .9em;
+    }
+    .notes-source {
+      margin-top: 1.5rem; border: 1px solid #bae6fd; border-radius: 1.25rem;
+      background: rgba(255,255,255,.82); overflow: hidden;
+    }
+    .notes-source summary { cursor: pointer; padding: 1rem 1.2rem; color: #075985; font-weight: 700; }
+    .notes-source pre {
+      max-height: 32rem; overflow: auto; border-top: 1px solid #e0f2fe;
+      background: #f8fafc; padding: 1.2rem; color: #334155; font-size: .78rem;
+      line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere;
+    }
+    .toc-link {
+      display: block; border-radius: .75rem; padding: .45rem .65rem;
+      color: #475569; font-size: .82rem; line-height: 1.35;
+    }
+    .toc-link:hover { background: #e0f2fe; color: #075985; }
+    .toc-link.is-sub { padding-left: 1.35rem; font-size: .76rem; }
+    @media (min-width: 900px) {
+      .notes-layout { grid-template-columns: 14rem minmax(0, 1fr); align-items: start; }
+      .notes-toc { display: block; position: sticky; top: 5.5rem; max-height: calc(100vh - 7rem); overflow: auto; }
+    }
+  </style>
+</head>
+<body>
+  <a href="#notes-content" class="sr-only focus:not-sr-only focus:fixed focus:z-50 focus:m-3 focus:rounded-full focus:bg-white focus:px-4 focus:py-2 focus:text-sky-800">本文へ移動</a>
+  <header class="sticky top-0 z-30 backdrop-blur-md bg-white/75 border-b border-sky-100/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <a href="../../../index.html" class="font-bold text-sky-900">📘 Engineer Textbook</a>
+      <nav data-breadcrumb='[{"label":"Top","href":"../../../index.html"},{"label":"クラウド","href":"../../../index.html#cloud"},{"label":"AWS CloudOps クイックメモ"}]' class="flex items-center flex-wrap text-[13px]" aria-label="パンくず"></nav>
+    </div>
+  </header>
+
+  <main id="notes-content" class="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24" tabindex="-1">
+    <section class="relative pb-8">
+      <div class="tb-hero-trail"></div>
+      <div class="relative">
+        <div class="flex flex-wrap gap-2 mb-4">
+          <span class="tb-badge">Markdown · 約8分</span>
+          <span class="tb-badge is-basic">要点集</span>
+        </div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-950">AWS CloudOps<br class="sm:hidden"> クイックメモ</h1>
+        <p class="mt-3 text-sky-800/80 max-w-3xl">頻出サービスの仕様を、Markdownの見出しと箇条書きで素早く見返せます。</p>
+        <div class="notes-actions mt-6">
+          <button id="copy-markdown" class="notes-button" type="button">Markdownをコピー</button>
+          <a class="notes-button" href="cloudops-notes.md" download>Markdownファイルを保存</a>
+        </div>
+        <p id="copy-status" class="notes-status mt-2" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <div class="notes-layout">
+      <aside class="notes-toc tb-card p-4" aria-label="ページ内目次">
+        <p class="px-2 pb-2 text-xs font-bold tracking-wide text-sky-700">目次</p>
+        <nav id="notes-toc"></nav>
+      </aside>
+
+      <div>
+        <article id="markdown-output" class="tb-card p-5 sm:p-8 md-prose" aria-live="polite" aria-busy="true">
+          <p class="text-slate-500">Markdownを読み込んでいます…</p>
+        </article>
+
+        <details class="notes-source">
+          <summary>Markdown原文を表示</summary>
+          <pre id="markdown-source"></pre>
+        </details>
+      </div>
+    </div>
+
+    <div class="mt-10 text-center">
+      <a href="../../../index.html" class="inline-block rounded-full bg-white text-sky-700 ring-1 ring-sky-200 px-6 py-3 text-sm font-semibold">← 教材一覧へ</a>
+    </div>
+  </main>
+
+  <script src="../../../assets/shared.js?v=20261101-1"></script>
+  <script>
+    (async function () {
+      const output = document.getElementById('markdown-output');
+      const raw = document.getElementById('markdown-source');
+      const toc = document.getElementById('notes-toc');
+      const copyButton = document.getElementById('copy-markdown');
+      const copyStatus = document.getElementById('copy-status');
+      let source = '';
+
+      try {
+        const response = await fetch('./cloudops-notes.md', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        source = await response.text();
+        output.innerHTML = renderMarkdown(source);
+        output.setAttribute('aria-busy', 'false');
+        raw.textContent = source;
+        buildToc();
+      } catch (error) {
+        output.setAttribute('aria-busy', 'false');
+        output.innerHTML = '<p class="text-slate-600">Markdownを読み込めませんでした。<a class="text-sky-700 underline" href="cloudops-notes.md">Markdownファイルを直接開く</a>ことができます。</p>';
+        copyButton.disabled = true;
+      }
+
+      copyButton.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(source);
+          copyStatus.textContent = 'Markdownをコピーしました。';
+        } catch (error) {
+          copyStatus.textContent = 'コピーできませんでした。Markdown原文から選択してください。';
+        }
+      });
+
+      function buildToc() {
+        output.querySelectorAll('h2, h3').forEach(heading => {
+          const link = document.createElement('a');
+          link.href = `#${heading.id}`;
+          link.className = `toc-link${heading.tagName === 'H3' ? ' is-sub' : ''}`;
+          link.textContent = heading.textContent;
+          toc.appendChild(link);
+        });
+      }
+
+      function renderMarkdown(markdown) {
+        const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
+        const html = [];
+        const paragraph = [];
+        let listItems = [];
+        const usedIds = new Map();
+
+        function flushParagraph() {
+          if (!paragraph.length) return;
+          html.push(`<p>${inline(paragraph.join(' '))}</p>`);
+          paragraph.length = 0;
+        }
+
+        function flushList() {
+          if (!listItems.length) return;
+          const roots = [];
+          const stack = [{ indent: -1, children: roots }];
+          listItems.forEach(item => {
+            while (stack.length > 1 && item.indent <= stack[stack.length - 1].indent) stack.pop();
+            const node = { text: item.text, children: [] };
+            stack[stack.length - 1].children.push(node);
+            stack.push({ indent: item.indent, children: node.children });
+          });
+          html.push(renderList(roots));
+          listItems = [];
+        }
+
+        function renderList(nodes) {
+          return `<ul>${nodes.map(node => `<li>${inline(node.text)}${node.children.length ? renderList(node.children) : ''}</li>`).join('')}</ul>`;
+        }
+
+        function uniqueId(text) {
+          const base = text.normalize('NFKC').toLowerCase()
+            .replace(/[^\p{Letter}\p{Number}]+/gu, '-')
+            .replace(/^-+|-+$/g, '') || 'section';
+          const count = usedIds.get(base) || 0;
+          usedIds.set(base, count + 1);
+          return count ? `${base}-${count + 1}` : base;
+        }
+
+        lines.forEach(line => {
+          const heading = line.match(/^(#{1,4})\s+(.+)$/);
+          const bullet = line.match(/^(\s*)-\s+(.+)$/);
+
+          if (heading) {
+            flushParagraph();
+            flushList();
+            const level = heading[1].length;
+            const text = heading[2].trim();
+            html.push(`<h${level} id="${uniqueId(text)}">${inline(text)}</h${level}>`);
+          } else if (bullet) {
+            flushParagraph();
+            listItems.push({ indent: bullet[1].replace(/\t/g, '  ').length, text: bullet[2] });
+          } else if (!line.trim()) {
+            flushParagraph();
+            flushList();
+          } else {
+            flushList();
+            paragraph.push(line.trim());
+          }
+        });
+
+        flushParagraph();
+        flushList();
+        return html.join('\n');
+      }
+
+      function inline(text) {
+        const escaped = String(text).replace(/[&<>"']/g, character => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[character]));
+        return escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
+      }
+    })();
+  </script>
+</body>
+</html>

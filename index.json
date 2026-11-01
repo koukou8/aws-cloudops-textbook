@@ -253,6 +253,16 @@
               "level": "beginner-to-advanced",
               "estimatedMinutes": 30,
               "createdAt": "2026-10-31"
+            },
+            {
+              "id": "cloud-aws-cloudops-notes",
+              "name": "AWS CloudOps クイックメモ",
+              "path": "topics/cloud/aws/cloudops-notes.html",
+              "summary": "CloudFront、NAT Gateway、Route 53、ELB、Auto Scaling、WAF、S3、Systems Manager、CodeDeploy、EC2、VPCエンドポイントのMarkdown要点集",
+              "keywords": "ALB CRR Synthetics Session Manager Instance Connect スティッキーセッション",
+              "level": "reference",
+              "estimatedMinutes": 8,
+              "createdAt": "2026-11-01"
             }
           ]
         }
